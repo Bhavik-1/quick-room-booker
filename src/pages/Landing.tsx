@@ -1,21 +1,25 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useEffect } from 'react';
 
 const Landing = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
 
   useEffect(() => {
+    console.log('Landing - Auth status:', { isAuthenticated, user });
     if (isAuthenticated && user) {
+      console.log('Redirecting to:', user.role === 'admin' ? '/admin' : '/dashboard');
       navigate(user.role === 'admin' ? '/admin' : '/dashboard');
     }
   }, [isAuthenticated, user, navigate]);
 
+  console.log('Landing component rendering');
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/20">
+    <div className="min-h-screen w-full bg-gradient-to-br from-primary/10 via-background to-secondary/20">
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
           <div className="flex items-center justify-center mb-6">
