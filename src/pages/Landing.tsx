@@ -1,22 +1,25 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Calendar, Clock, Users } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Calendar, Clock, Users } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Landing = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
 
   useEffect(() => {
-    console.log('Landing - Auth status:', { isAuthenticated, user });
+    console.log("Landing - Auth status:", { isAuthenticated, user });
     if (isAuthenticated && user) {
-      console.log('Redirecting to:', user.role === 'admin' ? '/admin' : '/dashboard');
-      navigate(user.role === 'admin' ? '/admin' : '/dashboard');
+      console.log(
+        "Redirecting to:",
+        user.role === "admin" ? "/admin" : "/dashboard"
+      );
+      navigate(user.role === "admin" ? "/admin" : "/dashboard");
     }
   }, [isAuthenticated, user, navigate]);
 
-  console.log('Landing component rendering');
+  console.log("Landing component rendering");
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-primary/10 via-background to-secondary/20">
@@ -35,27 +38,32 @@ const Landing = () => {
           <div className="bg-card p-6 rounded-lg shadow-lg border border-border text-center">
             <Calendar className="h-12 w-12 text-primary mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Easy Booking</h3>
-            <p className="text-muted-foreground">Book rooms in seconds with our intuitive interface</p>
+            <p className="text-muted-foreground">
+              Book rooms in seconds with our intuitive interface
+            </p>
           </div>
           <div className="bg-card p-6 rounded-lg shadow-lg border border-border text-center">
             <Clock className="h-12 w-12 text-primary mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Real-time Availability</h3>
-            <p className="text-muted-foreground">Check room availability instantly</p>
+            <h3 className="text-lg font-semibold mb-2">
+              Real-time Availability
+            </h3>
+            <p className="text-muted-foreground">
+              Check room availability instantly
+            </p>
           </div>
           <div className="bg-card p-6 rounded-lg shadow-lg border border-border text-center">
             <Users className="h-12 w-12 text-primary mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Admin Control</h3>
-            <p className="text-muted-foreground">Manage bookings and rooms efficiently</p>
+            <p className="text-muted-foreground">
+              Manage bookings and rooms efficiently
+            </p>
           </div>
         </div>
 
         <div className="text-center">
-          <Button size="lg" onClick={() => navigate('/login')} className="px-8">
+          <Button size="lg" onClick={() => navigate("/login")} className="px-8">
             Get Started
           </Button>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Demo credentials: student@college.edu / student123 or admin@college.edu / admin123
-          </p>
         </div>
       </div>
     </div>

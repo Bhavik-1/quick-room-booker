@@ -1,28 +1,34 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/contexts/AuthContext';
-import { BookingForm } from '@/components/BookingForm';
-import { MyBookings } from '@/components/MyBookings';
-import { Calendar, LogOut, BookOpen, List } from 'lucide-react';
-import { initializeStorage } from '@/lib/mockData';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { BookingForm } from "@/components/BookingForm";
+import { MyBookings } from "@/components/MyBookings";
+import { Calendar, LogOut, BookOpen, List } from "lucide-react";
+// import { initializeStorage } from '@/lib/mockData'; <-- REMOVED
 
 const StudentDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'book' | 'bookings'>('book');
+  const [activeTab, setActiveTab] = useState<"book" | "bookings">("book");
 
   useEffect(() => {
-    if (!user || user.role !== 'student') {
-      navigate('/login');
+    if (!user || user.role !== "student") {
+      navigate("/login");
     }
-    initializeStorage();
+    // initializeStorage(); <-- REMOVED: Data is now in MySQL
   }, [user, navigate]);
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate("/");
   };
 
   if (!user) return null;
@@ -36,7 +42,9 @@ const StudentDashboard = () => {
             <h1 className="text-xl font-bold text-primary">QuickRoom</h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">Welcome, {user.name}</span>
+            <span className="text-sm text-muted-foreground">
+              Welcome, {user.name}
+            </span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4 mr-2" />
               Logout
@@ -49,17 +57,17 @@ const StudentDashboard = () => {
         <div className="grid md:grid-cols-4 gap-6">
           <aside className="space-y-2">
             <Button
-              variant={activeTab === 'book' ? 'default' : 'ghost'}
+              variant={activeTab === "book" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => setActiveTab('book')}
+              onClick={() => setActiveTab("book")}
             >
               <BookOpen className="h-4 w-4 mr-2" />
               Book Room
             </Button>
             <Button
-              variant={activeTab === 'bookings' ? 'default' : 'ghost'}
+              variant={activeTab === "bookings" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => setActiveTab('bookings')}
+              onClick={() => setActiveTab("bookings")}
             >
               <List className="h-4 w-4 mr-2" />
               My Bookings
@@ -67,7 +75,7 @@ const StudentDashboard = () => {
             <Button
               variant="ghost"
               className="w-full justify-start"
-              onClick={() => navigate('/calendar')}
+              onClick={() => navigate("/calendar")}
             >
               <Calendar className="h-4 w-4 mr-2" />
               Calendar
@@ -75,18 +83,20 @@ const StudentDashboard = () => {
           </aside>
 
           <div className="md:col-span-3">
-            {activeTab === 'book' && (
+            {activeTab === "book" && (
               <Card>
                 <CardHeader>
                   <CardTitle>Book a Room</CardTitle>
-                  <CardDescription>Fill in the details to request a room booking</CardDescription>
+                  <CardDescription>
+                    Fill in the details to request a room booking
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <BookingForm />
                 </CardContent>
               </Card>
             )}
-            {activeTab === 'bookings' && <MyBookings />}
+            {activeTab === "bookings" && <MyBookings />}
           </div>
         </div>
       </div>

@@ -1,44 +1,61 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
-import { Calendar } from 'lucide-react';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { Calendar } from "lucide-react";
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const { login, signup } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (isLogin) {
-      const success = login(email, password);
-      if (success) {
-        const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        toast.success('Login successful!');
-        navigate(user.role === 'admin' ? '/admin' : '/dashboard');
-      } else {
-        toast.error('Invalid credentials');
+      try {
+        // ensure we await login in case it's asynchronous (prevents race conditions
+        // that can trigger stale/breach checks before auth completes)
+        const success = await login(email, password);
+        if (success) {
+          const user = JSON.parse(localStorage.getItem("currentUser") || "{}");
+          toast.success("Login successful!");
+          navigate(user.role === "admin" ? "/admin" : "/dashboard");
+        } else {
+          toast.error("Invalid credentials");
+        }
+      } catch (err: any) {
+        // show any error returned by auth layer
+        toast.error(err?.message ?? "Login failed");
       }
     } else {
       if (!name || !email || !password) {
-        toast.error('Please fill all fields');
+        toast.error("Please fill all fields");
         return;
       }
-      const success = signup(email, password, name);
-      if (success) {
-        toast.success('Account created successfully!');
-        navigate('/dashboard');
-      } else {
-        toast.error('Email already exists');
+      try {
+        const success = await signup(email, password, name);
+        if (success) {
+          toast.success("Account created successfully!");
+          navigate("/dashboard");
+        } else {
+          toast.error("Email already exists");
+        }
+      } catch (err: any) {
+        toast.error(err?.message ?? "Signup failed");
       }
     }
   };
@@ -52,7 +69,7 @@ const Login = () => {
           </div>
           <CardTitle className="text-2xl">QuickRoom</CardTitle>
           <CardDescription>
-            {isLogin ? 'Sign in to your account' : 'Create a new account'}
+            {isLogin ? "Sign in to your account" : "Create a new account"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -93,7 +110,7 @@ const Login = () => {
               />
             </div>
             <Button type="submit" className="w-full">
-              {isLogin ? 'Sign In' : 'Sign Up'}
+              {isLogin ? "Sign In" : "Sign Up"}
             </Button>
             <Button
               type="button"
@@ -101,7 +118,9 @@ const Login = () => {
               className="w-full"
               onClick={() => setIsLogin(!isLogin)}
             >
-              {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
+              {isLogin
+                ? "Don't have an account? Sign Up"
+                : "Already have an account? Sign In"}
             </Button>
           </form>
         </CardContent>
