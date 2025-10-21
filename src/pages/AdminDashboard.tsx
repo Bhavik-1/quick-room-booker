@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 // removed ApproveBookings import (we render pending inline)
 import { ManageRooms } from "@/components/ManageRooms";
 import { BulkBooking } from "@/components/BulkBooking";
-import { getAllBookings, updateBookingStatus } from "@/lib/DataApi";
+import { getAllBookings, updateBookingStatus } from "@/lib/dataApi";
 import { Calendar, LogOut, CheckSquare, Building, List, Upload } from "lucide-react";
 import { toast } from "sonner";
 
