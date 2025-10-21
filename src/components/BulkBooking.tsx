@@ -5,7 +5,7 @@ import { FileUpload } from "./FileUpload";
 import { ManualEntryTable } from "./ManualEntryTable";
 import { ConflictReview } from "./ConflictReview";
 import { ResultsSummary } from "./ResultsSummary";
-import { resolveConflicts } from "@/lib/DataApi";
+import { resolveConflicts } from "@/lib/dataApi";
 import { toast } from "sonner";
 import { Upload, Edit } from "lucide-react";
 
