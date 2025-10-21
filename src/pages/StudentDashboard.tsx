@@ -28,7 +28,7 @@ const StudentDashboard = () => {
 
   const handleLogout = () => {
     logout();
-    navigate("/");
+    navigate("/login");
   };
 
   if (!user) return null;
