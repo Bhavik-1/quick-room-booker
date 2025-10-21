@@ -191,6 +191,16 @@ export const updateBookingStatus = async (
   return api.put(`/bookings/${id}/status`, payload);
 };
 
+export const bulkCreateBookings = async (bookings: any[]): Promise<any> => {
+  const response = await api.post("/bookings/bulk", { bookings });
+  return response.data;
+};
+
+export const resolveConflicts = async (resolutions: any[]): Promise<any> => {
+  const response = await api.post("/bookings/bulk/resolve", { resolutions });
+  return response.data;
+};
+
 export const checkAvailability = () => {
   console.error("checkAvailability must be handled by the backend API.");
   return true;

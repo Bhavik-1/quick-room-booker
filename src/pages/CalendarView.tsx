@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllBookings, getVisibleBookings } from "@/lib/DataApi";
+import { getAllBookings, getVisibleBookings } from "@/lib/dataApi";
 import { Calendar, LogOut, ArrowLeft } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -13,15 +13,41 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const CalendarView = () => {
+type Booking = {
+  id: string;
+  title?: string;
+  room?: string;
+  roomName?: string;
+  user?: { id: string; name: string; email?: string };
+  userName?: string;
+  userId?: string;
+  start?: string;
+  end?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  status?: string;
+  purpose?: string;
+  notes?: string;
+  duration?: number;
+  // ...other fields...
+};
+
+const CalendarView = ({
+  showAll = false,
+  detailed = false,
+}: {
+  showAll?: boolean;
+  detailed?: boolean;
+}) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const calendarRef = useRef<any>(null);

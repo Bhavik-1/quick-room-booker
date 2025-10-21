@@ -4,16 +4,25 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 // removed ApproveBookings import (we render pending inline)
 import { ManageRooms } from "@/components/ManageRooms";
-import { getAllBookings, updateBookingStatus } from "@/lib/DataApi";
-import { Calendar, LogOut, CheckSquare, Building, List } from "lucide-react";
+import { BulkBooking } from "@/components/BulkBooking";
+import { getAllBookings, updateBookingStatus } from "@/lib/dataApi";
+import {
+  Calendar,
+  LogOut,
+  CheckSquare,
+  Building,
+  List,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
+import CalendarView from "./CalendarView";
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"approve" | "rooms" | "all">(
-    "approve"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "approve" | "rooms" | "all" | "bulk" | "calendar"
+  >("approve");
 
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [loadingAll, setLoadingAll] = useState(false);
@@ -282,6 +291,16 @@ const AdminDashboard = () => {
               <List className="h-4 w-4 mr-2" />
               All Bookings
             </Button>
+
+            <Button
+              variant={activeTab === "calendar" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => setActiveTab("calendar")}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Calendar
+            </Button>
+
             <Button
               variant={activeTab === "rooms" ? "default" : "ghost"}
               className="w-full justify-start"
@@ -291,12 +310,12 @@ const AdminDashboard = () => {
               Manage Rooms
             </Button>
             <Button
-              variant="ghost"
+              variant={activeTab === "bulk" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => navigate("/calendar")}
+              onClick={() => setActiveTab("bulk")}
             >
-              <Calendar className="h-4 w-4 mr-2" />
-              Calendar
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Booking
             </Button>
           </aside>
 
@@ -404,6 +423,8 @@ const AdminDashboard = () => {
 
             {activeTab === "rooms" && <ManageRooms />}
 
+            {activeTab === "bulk" && <BulkBooking />}
+
             {activeTab === "all" && (
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -491,9 +512,31 @@ const AdminDashboard = () => {
                 </div>
               </div>
             )}
+
+            {activeTab === "calendar" && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Calendar</h2>
+                  <div>
+                    <Button
+                      onClick={fetchAllBookings}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Refresh
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg border border-slate-100 shadow-sm">
+                  <CalendarView showAll detailed />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+      {/* Removed bottom CalendarView - calendar is now a sidebar tab */}
     </div>
   );
 };

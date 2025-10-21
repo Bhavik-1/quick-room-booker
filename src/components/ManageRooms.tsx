@@ -1,6 +1,6 @@
 import React from "react"; // <--- added for JSX/TSX safety
 import { useState, useEffect } from "react";
-import { getRooms, addRoom, updateRoom, deleteRoom, Room } from "@/lib/DataApi";
+import { getRooms, addRoom, updateRoom, deleteRoom, Room } from "@/lib/dataApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
