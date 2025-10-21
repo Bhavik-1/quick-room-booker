@@ -4,6 +4,7 @@ import express from "express";
 import db from "../db.js";
 import { protect, admin } from "../middleware/auth.js";
 import { checkAvailability } from "./rooms.js";
+import { sendApprovalEmail, sendRejectionEmail } from "../services/emailService.js";
 
 const router = express.Router();
 
