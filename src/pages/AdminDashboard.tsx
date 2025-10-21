@@ -4,14 +4,15 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 // removed ApproveBookings import (we render pending inline)
 import { ManageRooms } from "@/components/ManageRooms";
+import { BulkBooking } from "@/components/BulkBooking";
 import { getAllBookings, updateBookingStatus } from "@/lib/DataApi";
-import { Calendar, LogOut, CheckSquare, Building, List } from "lucide-react";
+import { Calendar, LogOut, CheckSquare, Building, List, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"approve" | "rooms" | "all">(
+  const [activeTab, setActiveTab] = useState<"approve" | "rooms" | "all" | "bulk">(
     "approve"
   );
 
@@ -291,12 +292,12 @@ const AdminDashboard = () => {
               Manage Rooms
             </Button>
             <Button
-              variant="ghost"
+              variant={activeTab === "bulk" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => navigate("/calendar")}
+              onClick={() => setActiveTab("bulk")}
             >
-              <Calendar className="h-4 w-4 mr-2" />
-              Calendar
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Booking
             </Button>
           </aside>
 
@@ -403,6 +404,8 @@ const AdminDashboard = () => {
             )}
 
             {activeTab === "rooms" && <ManageRooms />}
+
+            {activeTab === "bulk" && <BulkBooking />}
 
             {activeTab === "all" && (
               <div>
