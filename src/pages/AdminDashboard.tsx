@@ -1,11 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 // removed ApproveBookings import (we render pending inline)
 import { ManageRooms } from "@/components/ManageRooms";
 import { BulkBooking } from "@/components/BulkBooking";
-import { getAllBookings, updateBookingStatus } from "@/lib/dataApi";
+import { getAllBookings, updateBookingStatus, getRooms } from "@/lib/dataApi";
 import {
   Calendar,
   LogOut,
@@ -30,6 +39,13 @@ const AdminDashboard = () => {
   const [pendingBookings, setPendingBookings] = useState<any[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
 
+  // Filter state for All Bookings tab
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [selectedRoomFilter, setSelectedRoomFilter] = useState("all");
+  const [filteredBookings, setFilteredBookings] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<any[]>([]);
+
   useEffect(() => {
     if (!user || user.role !== "admin") {
       navigate("/login");
@@ -45,7 +61,9 @@ const AdminDashboard = () => {
     setLoadingAll(true);
     try {
       const data = await getAllBookings();
-      setAllBookings(Array.isArray(data) ? data : []);
+      const bookings = Array.isArray(data) ? data : [];
+      setAllBookings(bookings);
+      setFilteredBookings(bookings);
     } catch (err) {
       console.error("Failed to fetch all bookings", err);
       toast.error("Failed to load bookings");
@@ -72,10 +90,78 @@ const AdminDashboard = () => {
     }
   }, []);
 
+  const fetchRooms = useCallback(async () => {
+    try {
+      const data = await getRooms();
+      setRooms(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch rooms", err);
+    }
+  }, []);
+
   useEffect(() => {
-    if (activeTab === "all") fetchAllBookings();
+    if (activeTab === "all") {
+      fetchAllBookings();
+      fetchRooms();
+      // Reset filters when tab becomes active
+      setFromDate("");
+      setToDate("");
+      setSelectedRoomFilter("all");
+    }
     if (activeTab === "approve") fetchPendingBookings();
-  }, [activeTab, fetchAllBookings, fetchPendingBookings]);
+  }, [activeTab, fetchAllBookings, fetchPendingBookings, fetchRooms]);
+
+  const handleApplyFilters = () => {
+    let filtered = [...allBookings];
+
+    // Apply date filters
+    if (fromDate || toDate) {
+      filtered = filtered.filter((b) => {
+        const bookingDateStr = b.date ?? b.booking_date;
+        if (!bookingDateStr) return false;
+
+        // Extract date portion (YYYY-MM-DD)
+        let dateOnly = bookingDateStr;
+        if (bookingDateStr.includes("T")) {
+          dateOnly = bookingDateStr.split("T")[0];
+        }
+
+        const bookingDate = new Date(dateOnly);
+        if (isNaN(bookingDate.getTime())) return false;
+
+        // Compare dates
+        if (fromDate) {
+          const from = new Date(fromDate);
+          if (bookingDate < from) return false;
+        }
+        if (toDate) {
+          const to = new Date(toDate);
+          if (bookingDate > to) return false;
+        }
+
+        return true;
+      });
+    }
+
+    // Apply room filter
+    if (selectedRoomFilter !== "all") {
+      filtered = filtered.filter(
+        (b) =>
+          String(b.room_id ?? b.roomId) === String(selectedRoomFilter)
+      );
+    }
+
+    setFilteredBookings(filtered);
+    toast.success("Filters applied");
+  };
+
+  const handleResetFilters = () => {
+    setFromDate("");
+    setToDate("");
+    setSelectedRoomFilter("all");
+    setFilteredBookings(allBookings);
+    toast.success("Filters cleared");
+  };
 
   // Helper: parse backend date + time into a local Date (handles ISO datetime or date + time)
   const parseLocal = (dateStr?: string, timeStr?: string): Date | null => {
@@ -253,18 +339,18 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-secondary/20">
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-card border-b border-border shadow-md">
+        <div className="container mx-auto px-4 py-5 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Calendar className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold text-primary">QuickRoom Admin</h1>
+            <h1 className="text-lg font-bold text-primary">QuickRoom Admin</h1>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
               Welcome, {user?.name}
             </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button variant="outline" size="sm" onClick={handleLogout} className="hover:bg-slate-100 transition">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -274,10 +360,14 @@ const AdminDashboard = () => {
 
       <div className="container mx-auto px-4 py-8">
         <div className="grid md:grid-cols-4 gap-6">
-          <aside className="space-y-2">
+          <aside className="space-y-1">
             <Button
               variant={activeTab === "approve" ? "default" : "ghost"}
-              className="w-full justify-start"
+              className={`w-full justify-start ${
+                activeTab === "approve"
+                  ? "bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
               onClick={() => setActiveTab("approve")}
             >
               <CheckSquare className="h-4 w-4 mr-2" />
@@ -285,7 +375,11 @@ const AdminDashboard = () => {
             </Button>
             <Button
               variant={activeTab === "all" ? "default" : "ghost"}
-              className="w-full justify-start"
+              className={`w-full justify-start ${
+                activeTab === "all"
+                  ? "bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
               onClick={() => setActiveTab("all")}
             >
               <List className="h-4 w-4 mr-2" />
@@ -294,7 +388,11 @@ const AdminDashboard = () => {
 
             <Button
               variant={activeTab === "calendar" ? "default" : "ghost"}
-              className="w-full justify-start"
+              className={`w-full justify-start ${
+                activeTab === "calendar"
+                  ? "bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
               onClick={() => setActiveTab("calendar")}
             >
               <Calendar className="h-4 w-4 mr-2" />
@@ -303,7 +401,11 @@ const AdminDashboard = () => {
 
             <Button
               variant={activeTab === "rooms" ? "default" : "ghost"}
-              className="w-full justify-start"
+              className={`w-full justify-start ${
+                activeTab === "rooms"
+                  ? "bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
               onClick={() => setActiveTab("rooms")}
             >
               <Building className="h-4 w-4 mr-2" />
@@ -311,7 +413,11 @@ const AdminDashboard = () => {
             </Button>
             <Button
               variant={activeTab === "bulk" ? "default" : "ghost"}
-              className="w-full justify-start"
+              className={`w-full justify-start ${
+                activeTab === "bulk"
+                  ? "bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
               onClick={() => setActiveTab("bulk")}
             >
               <Upload className="h-4 w-4 mr-2" />
@@ -322,7 +428,7 @@ const AdminDashboard = () => {
           <div className="md:col-span-3">
             {activeTab === "approve" && (
               <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold">Pending Approvals</h2>
                   <div>
                     <Button
@@ -335,7 +441,7 @@ const AdminDashboard = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto bg-white p-4 rounded-lg border border-slate-100 shadow-sm">
+                <div className="overflow-x-auto bg-white p-4 rounded-xl border border-slate-200 shadow-md">
                   {loadingPending ? (
                     <div>Loading pending bookings...</div>
                   ) : pendingBookings.length === 0 ? (
@@ -344,17 +450,17 @@ const AdminDashboard = () => {
                     </div>
                   ) : (
                     <table className="w-full table-auto text-sm">
-                      <thead>
-                        <tr className="text-left text-slate-600">
-                          <th className="px-3 py-2">Room</th>
-                          <th className="px-3 py-2">User</th>
-                          <th className="px-3 py-2">Date</th>
-                          <th className="px-3 py-2">Start</th>
-                          <th className="px-3 py-2">End</th>
-                          <th className="px-3 py-2">Actions</th>
+                      <thead className="bg-slate-50">
+                        <tr className="text-left text-slate-600 border-b-2 border-slate-200">
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Room</th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">User</th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Date</th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Start</th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">End</th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y">
+                      <tbody>
                         {pendingBookings.map((b) => {
                           const start = parseLocal(
                             b.date ?? b.booking_date,
@@ -365,17 +471,17 @@ const AdminDashboard = () => {
                             b.end_time ?? b.endTime ?? b.end
                           );
                           return (
-                            <tr key={b.id} className="hover:bg-slate-50">
-                              <td className="px-3 py-3 align-top font-medium">
+                            <tr key={b.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-4 align-top font-medium">
                                 {b.room_name ?? b.roomName}
                               </td>
-                              <td className="px-3 py-3 align-top text-sm text-slate-700">
+                              <td className="px-4 py-4 align-top text-sm text-slate-700">
                                 {b.user_name ?? b.userName}
                               </td>
-                              <td className="px-3 py-3 align-top">
+                              <td className="px-4 py-4 align-top">
                                 {formatDateDMY(start)}
                               </td>
-                              <td className="px-3 py-3 align-top">
+                              <td className="px-4 py-4 align-top">
                                 {start
                                   ? start.toLocaleTimeString([], {
                                       hour: "numeric",
@@ -384,7 +490,7 @@ const AdminDashboard = () => {
                                     })
                                   : "-"}
                               </td>
-                              <td className="px-3 py-3 align-top">
+                              <td className="px-4 py-4 align-top">
                                 {end
                                   ? end.toLocaleTimeString([], {
                                       hour: "numeric",
@@ -393,11 +499,11 @@ const AdminDashboard = () => {
                                     })
                                   : "-"}
                               </td>
-                              <td className="px-3 py-3 align-top">
+                              <td className="px-4 py-4 align-top">
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
-                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    className="bg-green-600 hover:bg-green-700 text-white rounded-md"
                                     onClick={() => handleApprove(b)}
                                   >
                                     Approve
@@ -405,6 +511,7 @@ const AdminDashboard = () => {
                                   <Button
                                     size="sm"
                                     variant="destructive"
+                                    className="rounded-md"
                                     onClick={() => handleReject(b)}
                                   >
                                     Reject
@@ -427,15 +534,9 @@ const AdminDashboard = () => {
 
             {activeTab === "all" && (
               <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold">All Bookings</h2>
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm text-slate-500">
-                      Total:{" "}
-                      <span className="font-medium text-slate-700">
-                        {allBookings.length}
-                      </span>
-                    </div>
+                  <div>
                     <Button
                       onClick={fetchAllBookings}
                       variant="outline"
@@ -446,69 +547,160 @@ const AdminDashboard = () => {
                   </div>
                 </div>
 
-                <div className="overflow-auto bg-white p-4 rounded-lg border border-slate-100 shadow-sm">
-                  {loadingAll ? (
-                    <div>Loading...</div>
-                  ) : (
-                    <table className="w-full table-auto text-sm">
-                      <thead>
-                        <tr className="text-left text-slate-600">
-                          <th className="px-3 py-2">Room</th>
-                          <th className="px-3 py-2">User</th>
-                          <th className="px-3 py-2">Date</th>
-                          <th className="px-3 py-2">Start</th>
-                          <th className="px-3 py-2">End</th>
-                          <th className="px-3 py-2">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {allBookings.map((b) => {
-                          const start = parseLocal(
-                            b.date ?? b.booking_date,
-                            b.start_time ?? b.startTime ?? b.start
-                          );
-                          const end = parseLocal(
-                            b.date ?? b.booking_date,
-                            b.end_time ?? b.endTime ?? b.end
-                          );
-                          return (
-                            <tr key={b.id} className="hover:bg-slate-50">
-                              <td className="px-3 py-3 align-top font-medium">
-                                {b.room_name ?? b.roomName}
-                              </td>
-                              <td className="px-3 py-3 align-top text-sm text-slate-700">
-                                {b.user_name ?? b.userName}
-                              </td>
-                              <td className="px-3 py-3 align-top">
-                                {formatDateDMY(start)}
-                              </td>
-                              <td className="px-3 py-3 align-top">
-                                {start
-                                  ? start.toLocaleTimeString([], {
-                                      hour: "numeric",
-                                      minute: "2-digit",
-                                      hour12: true,
-                                    })
-                                  : "-"}
-                              </td>
-                              <td className="px-3 py-3 align-top">
-                                {end
-                                  ? end.toLocaleTimeString([], {
-                                      hour: "numeric",
-                                      minute: "2-digit",
-                                      hour12: true,
-                                    })
-                                  : "-"}
-                              </td>
-                              <td className="px-3 py-3 align-top">
-                                {statusBadge(b.status ?? b.booking_status)}
-                              </td>
+                <div className="flex gap-6">
+                  {/* Filter Sidebar */}
+                  <aside className="w-60 flex-shrink-0">
+                    <div className="bg-white border border-slate-200 rounded-xl shadow-md p-5">
+                      <h3 className="text-base font-semibold text-slate-900 mb-4">
+                        Filters
+                      </h3>
+
+                      {/* Date Range Section */}
+                      <div className="mb-4">
+                        <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 block">
+                          Date Range
+                        </Label>
+                        <div className="space-y-2">
+                          <Input
+                            type="date"
+                            value={fromDate}
+                            onChange={(e) => setFromDate(e.target.value)}
+                            className="text-sm"
+                            placeholder="From date"
+                          />
+                          <Input
+                            type="date"
+                            value={toDate}
+                            onChange={(e) => setToDate(e.target.value)}
+                            className="text-sm"
+                            placeholder="To date"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Room Filter Section */}
+                      <div className="mb-5">
+                        <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 block">
+                          Room
+                        </Label>
+                        <Select
+                          value={selectedRoomFilter}
+                          onValueChange={setSelectedRoomFilter}
+                        >
+                          <SelectTrigger className="text-sm">
+                            <SelectValue placeholder="All Rooms" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Rooms</SelectItem>
+                            {rooms.map((room) => (
+                              <SelectItem key={room.id} value={String(room.id)}>
+                                {room.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="space-y-2">
+                        <Button
+                          onClick={handleApplyFilters}
+                          className="w-full bg-blue-600 hover:bg-blue-700"
+                          size="sm"
+                        >
+                          Apply Filters
+                        </Button>
+                        <Button
+                          onClick={handleResetFilters}
+                          variant="outline"
+                          className="w-full"
+                          size="sm"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                    </div>
+                  </aside>
+
+                  {/* Table Section */}
+                  <div className="flex-1">
+                    <div className="text-sm text-slate-500 mb-3">
+                      Showing{" "}
+                      <span className="font-semibold text-slate-900">
+                        {filteredBookings.length}
+                      </span>{" "}
+                      results
+                    </div>
+
+                    <div className="overflow-auto bg-white p-4 rounded-xl border border-slate-200 shadow-md">
+                      {loadingAll ? (
+                        <div>Loading...</div>
+                      ) : filteredBookings.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">
+                          No bookings match the selected filters
+                        </div>
+                      ) : (
+                        <table className="w-full table-auto text-sm">
+                          <thead className="bg-slate-50">
+                            <tr className="text-left text-slate-600 border-b-2 border-slate-200">
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Room</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">User</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Date</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Start</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">End</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Status</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
+                          </thead>
+                          <tbody>
+                            {filteredBookings.map((b) => {
+                              const start = parseLocal(
+                                b.date ?? b.booking_date,
+                                b.start_time ?? b.startTime ?? b.start
+                              );
+                              const end = parseLocal(
+                                b.date ?? b.booking_date,
+                                b.end_time ?? b.endTime ?? b.end
+                              );
+                              return (
+                                <tr key={b.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors">
+                                  <td className="px-4 py-4 align-top font-medium">
+                                    {b.room_name ?? b.roomName}
+                                  </td>
+                                  <td className="px-4 py-4 align-top text-sm text-slate-700">
+                                    {b.user_name ?? b.userName}
+                                  </td>
+                                  <td className="px-4 py-4 align-top">
+                                    {formatDateDMY(start)}
+                                  </td>
+                                  <td className="px-4 py-4 align-top">
+                                    {start
+                                      ? start.toLocaleTimeString([], {
+                                          hour: "numeric",
+                                          minute: "2-digit",
+                                          hour12: true,
+                                        })
+                                      : "-"}
+                                  </td>
+                                  <td className="px-4 py-4 align-top">
+                                    {end
+                                      ? end.toLocaleTimeString([], {
+                                          hour: "numeric",
+                                          minute: "2-digit",
+                                          hour12: true,
+                                        })
+                                      : "-"}
+                                  </td>
+                                  <td className="px-4 py-4 align-top">
+                                    {statusBadge(b.status ?? b.booking_status)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -528,7 +720,7 @@ const AdminDashboard = () => {
                   </div>
                 </div>
 
-                <div className="bg-white p-4 rounded-lg border border-slate-100 shadow-sm">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-md">
                   <CalendarView showAll detailed />
                 </div>
               </div>
