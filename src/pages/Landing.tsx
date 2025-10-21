@@ -22,38 +22,44 @@ const Landing = () => {
   console.log("Landing component rendering");
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-primary/10 via-background to-secondary/20">
-      <div className="container mx-auto px-4 py-16">
-        <div className="text-center mb-16">
+    <div className="min-h-screen w-full bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500">
+      <div className="container mx-auto px-4 py-20">
+        <div className="text-center mb-20">
           <div className="flex items-center justify-center mb-6">
-            <Calendar className="h-16 w-16 text-primary" />
+            <Calendar className="h-16 w-16 text-white drop-shadow-lg" />
           </div>
-          <h1 className="text-5xl font-bold text-primary mb-4">QuickRoom</h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <h1 className="text-6xl font-bold text-white mb-4 drop-shadow-lg">QuickRoom</h1>
+          <p className="text-2xl text-white/95 max-w-2xl mx-auto drop-shadow-md">
             College Room & Resource Booking System - Simple, Fast, Efficient
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 mb-16 max-w-5xl mx-auto">
-          <div className="bg-card p-6 rounded-lg shadow-lg border border-border text-center">
-            <Calendar className="h-12 w-12 text-primary mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Easy Booking</h3>
+          <div className="bg-gradient-to-br from-blue-100 to-purple-100 p-8 rounded-xl shadow-xl border border-white/30 text-center hover:scale-105 transition-transform duration-200">
+            <div className="h-16 w-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
+              <Calendar className="h-8 w-8 text-white" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Easy Booking</h3>
             <p className="text-muted-foreground">
               Book rooms in seconds with our intuitive interface
             </p>
           </div>
-          <div className="bg-card p-6 rounded-lg shadow-lg border border-border text-center">
-            <Clock className="h-12 w-12 text-primary mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">
+          <div className="bg-gradient-to-br from-purple-100 to-pink-100 p-8 rounded-xl shadow-xl border border-white/30 text-center hover:scale-105 transition-transform duration-200">
+            <div className="h-16 w-16 mx-auto mb-4 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg">
+              <Clock className="h-8 w-8 text-white" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">
               Real-time Availability
             </h3>
             <p className="text-muted-foreground">
               Check room availability instantly
             </p>
           </div>
-          <div className="bg-card p-6 rounded-lg shadow-lg border border-border text-center">
-            <Users className="h-12 w-12 text-primary mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Admin Control</h3>
+          <div className="bg-gradient-to-br from-pink-100 to-blue-100 p-8 rounded-xl shadow-xl border border-white/30 text-center hover:scale-105 transition-transform duration-200">
+            <div className="h-16 w-16 mx-auto mb-4 bg-gradient-to-br from-pink-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg">
+              <Users className="h-8 w-8 text-white" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Admin Control</h3>
             <p className="text-muted-foreground">
               Manage bookings and rooms efficiently
             </p>
@@ -61,7 +67,11 @@ const Landing = () => {
         </div>
 
         <div className="text-center">
-          <Button size="lg" onClick={() => navigate("/login")} className="px-8">
+          <Button 
+            size="lg" 
+            onClick={() => navigate("/login")} 
+            className="px-12 py-6 shadow-2xl hover:scale-110 transition-all duration-200 text-lg"
+          >
             Get Started
           </Button>
         </div>
