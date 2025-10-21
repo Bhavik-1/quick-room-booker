@@ -4,7 +4,7 @@ import {
   getMyBookings,
   getAllBookings,
   Booking as ApiBooking,
-} from "@/lib/DataApi";
+} from "@/lib/dataApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
