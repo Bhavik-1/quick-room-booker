@@ -19,7 +19,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, X, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { getRooms, bulkCreateBookings, Room } from "@/lib/DataApi";
+import { getRooms, bulkCreateBookings, Room } from "@/lib/dataApi";
 
 interface BookingRow {
   id: string;
