@@ -5,7 +5,7 @@ import { Upload, FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-import { bulkCreateBookings } from "@/lib/DataApi";
+import { bulkCreateBookings } from "@/lib/dataApi";
 
 interface FileUploadProps {
   onProcessComplete: (results: any) => void;
