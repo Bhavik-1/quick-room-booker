@@ -34,9 +34,9 @@ const StudentDashboard = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-secondary/20">
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-card border-b border-border shadow-md">
+        <div className="container mx-auto px-4 py-5 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Calendar className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-bold text-primary">QuickRoom</h1>
@@ -45,7 +45,7 @@ const StudentDashboard = () => {
             <span className="text-sm text-muted-foreground">
               Welcome, {user.name}
             </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button variant="outline" size="sm" onClick={handleLogout} className="hover:bg-slate-100 transition">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -55,10 +55,14 @@ const StudentDashboard = () => {
 
       <div className="container mx-auto px-4 py-8">
         <div className="grid md:grid-cols-4 gap-6">
-          <aside className="space-y-2">
+          <aside className="space-y-1">
             <Button
               variant={activeTab === "book" ? "default" : "ghost"}
-              className="w-full justify-start"
+              className={`w-full justify-start ${
+                activeTab === "book"
+                  ? "bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
               onClick={() => setActiveTab("book")}
             >
               <BookOpen className="h-4 w-4 mr-2" />
@@ -66,7 +70,11 @@ const StudentDashboard = () => {
             </Button>
             <Button
               variant={activeTab === "bookings" ? "default" : "ghost"}
-              className="w-full justify-start"
+              className={`w-full justify-start ${
+                activeTab === "bookings"
+                  ? "bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
               onClick={() => setActiveTab("bookings")}
             >
               <List className="h-4 w-4 mr-2" />
@@ -74,7 +82,7 @@ const StudentDashboard = () => {
             </Button>
             <Button
               variant="ghost"
-              className="w-full justify-start"
+              className="w-full justify-start text-slate-600 hover:bg-slate-50"
               onClick={() => navigate("/calendar")}
             >
               <Calendar className="h-4 w-4 mr-2" />
@@ -84,7 +92,7 @@ const StudentDashboard = () => {
 
           <div className="md:col-span-3">
             {activeTab === "book" && (
-              <Card>
+              <Card className="border-slate-200 rounded-xl shadow-md">
                 <CardHeader>
                   <CardTitle>Book a Room</CardTitle>
                   <CardDescription>

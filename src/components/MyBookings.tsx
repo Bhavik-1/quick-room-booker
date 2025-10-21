@@ -128,9 +128,9 @@ export const MyBookings = () => {
 
   if (bookings === null) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold">My Bookings</h2>
+          <h2 className="text-xl font-bold text-slate-900">My Bookings</h2>
           <Button size="sm" variant="ghost" disabled>
             <RefreshCw className="h-4 w-4 animate-spin" />
           </Button>
@@ -145,11 +145,12 @@ export const MyBookings = () => {
   const bookingsList = bookings || [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold">My Bookings</h2>
+        <h2 className="text-xl font-bold text-slate-900">My Bookings</h2>
         <Button
           size="sm"
+          variant="outline"
           onClick={() => fetchMyBookings()}
           disabled={isRefreshing}
         >
@@ -159,7 +160,7 @@ export const MyBookings = () => {
       </div>
 
       {bookingsList.length === 0 ? (
-        <Card>
+        <Card className="border-slate-200 rounded-xl shadow-md">
           <CardContent className="py-8 text-center text-muted-foreground">
             No bookings yet. Create your first booking!
           </CardContent>
@@ -171,34 +172,35 @@ export const MyBookings = () => {
               booking.id ||
               `${booking.roomId}-${booking.date}-${booking.startTime}`
             }
+            className="border-slate-200 rounded-xl shadow-md hover:shadow-lg hover:border-slate-300 transition-all duration-200"
           >
-            <CardHeader>
+            <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
-                <CardTitle className="text-lg">{booking.roomName}</CardTitle>
-                <Badge className={getStatusColor(booking.status)}>
+                <CardTitle className="text-lg text-slate-900">{booking.roomName}</CardTitle>
+                <Badge className={`${getStatusColor(booking.status)} px-3 py-1 rounded-full text-xs font-semibold`}>
                   {booking.status.toUpperCase()}
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-3">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground">Date</p>
-                  <p className="font-medium">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide font-semibold">Date</p>
+                  <p className="font-medium text-slate-900">
                     {booking.date
                       ? new Date(booking.date).toLocaleDateString()
                       : "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Time</p>
-                  <p className="font-medium">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide font-semibold">Time</p>
+                  <p className="font-medium text-slate-900">
                     {booking.startTime || "—"} - {booking.endTime || "—"}
                   </p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-muted-foreground">Purpose</p>
-                  <p className="font-medium">{booking.purpose || "—"}</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide font-semibold">Purpose</p>
+                  <p className="font-medium text-slate-900">{booking.purpose || "—"}</p>
                 </div>
               </div>
             </CardContent>

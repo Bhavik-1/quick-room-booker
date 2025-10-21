@@ -304,7 +304,7 @@ const CalendarView = ({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-secondary/20 p-8">
+      <div className="min-h-screen bg-slate-50 p-8">
         <Skeleton className="h-10 w-full mb-8" />
         <Skeleton className="h-[600px] w-full rounded-lg" />
       </div>
@@ -330,9 +330,9 @@ const CalendarView = ({
   };
 
   return (
-    <div className="min-h-screen bg-secondary/20">
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-card border-b border-border shadow-md">
+        <div className="container mx-auto px-4 py-5 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -353,7 +353,7 @@ const CalendarView = ({
             <span className="text-sm text-muted-foreground">
               Welcome, {user?.name}
             </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button variant="outline" size="sm" onClick={handleLogout} className="hover:bg-slate-100 transition">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -362,7 +362,7 @@ const CalendarView = ({
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        <div className="bg-card p-6 rounded-lg border border-border">
+        <div className="bg-card p-6 rounded-xl border border-slate-200 shadow-md">
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -466,7 +466,7 @@ const CalendarView = ({
           {selectedEvent && (
             <div className="space-y-4">
               <div className="flex justify-between items-start">
-                <h3 className="font-semibold text-lg">
+                <h3 className="font-semibold text-lg text-slate-900">
                   {selectedEvent.roomName}
                 </h3>
                 <Badge className={getStatusColor(selectedEvent.status)}>
@@ -475,25 +475,25 @@ const CalendarView = ({
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground">Booked by</p>
-                  <p className="font-medium">{selectedEvent.userName}</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Booked by</p>
+                  <p className="font-medium text-slate-900">{selectedEvent.userName}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Date</p>
-                  <p className="font-medium">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Date</p>
+                  <p className="font-medium text-slate-900">
                     {formatDateDMY(selectedEvent.date)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Time</p>
-                  <p className="font-medium">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Time</p>
+                  <p className="font-medium text-slate-900">
                     {formatTimeAMPM(selectedEvent.startTime)} -{" "}
                     {formatTimeAMPM(selectedEvent.endTime)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Purpose</p>
-                  <p className="font-medium">{selectedEvent.purpose}</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Purpose</p>
+                  <p className="font-medium text-slate-900">{selectedEvent.purpose}</p>
                 </div>
               </div>
             </div>
