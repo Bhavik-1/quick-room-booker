@@ -11,6 +11,8 @@ export const ApproveBookings = () => {
   // Initialize as null to signal loading, or empty array once data is fetched
   const [bookings, setBookings] = useState<Booking[] | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null); // To track which booking is being processed
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string>("");
 
   // --- Data Fetching Logic ---
   const fetchBookings = async () => {
@@ -59,7 +61,36 @@ export const ApproveBookings = () => {
   };
 
   const handleApprove = (id: string) => handleUpdateStatus(id, "approved");
-  const handleReject = (id: string) => handleUpdateStatus(id, "rejected");
+  
+  const handleRejectClick = (id: string) => {
+    setRejectingId(id);
+    setRejectionReason("");
+  };
+
+  const handleCancelReject = () => {
+    setRejectingId(null);
+    setRejectionReason("");
+  };
+
+  const handleConfirmReject = async (id: string) => {
+    if (isProcessing) return;
+    
+    setIsProcessing(id);
+    
+    try {
+      await updateBookingStatus(id, "rejected", rejectionReason.trim() || undefined);
+      await fetchBookings();
+      toast.success("Booking rejected.");
+      setRejectingId(null);
+      setRejectionReason("");
+    } catch (error: any) {
+      console.error(`Failed to reject booking ${id}:`, error);
+      const message = error.response?.data?.message || "Rejection failed due to a server error.";
+      toast.error(message);
+    } finally {
+      setIsProcessing(null);
+    }
+  };
 
   // --- Helper Functions ---
   const getStatusColor = (status: string) => {
@@ -141,32 +172,59 @@ export const ApproveBookings = () => {
                   <p className="text-muted-foreground text-sm">Purpose</p>
                   <p className="text-sm">{booking.purpose}</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleApprove(booking.id)}
-                    className="bg-success hover:bg-success/90"
-                    disabled={isProcessing === booking.id}
-                  >
-                    {isProcessing === booking.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Check className="h-4 w-4 mr-2" />
-                    )}
-                    Approve
-                  </Button>
-                  <Button
-                    onClick={() => handleReject(booking.id)}
-                    variant="destructive"
-                    disabled={isProcessing === booking.id}
-                  >
-                    {isProcessing === booking.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
+                {rejectingId === booking.id ? (
+                  <div>
+                    <textarea
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="Enter rejection reason (optional)"
+                      rows={3}
+                      className="w-full border border-border rounded-md p-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleCancelReject}
+                        variant="outline"
+                        disabled={isProcessing === booking.id}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => handleConfirmReject(booking.id)}
+                        variant="destructive"
+                        disabled={isProcessing === booking.id}
+                      >
+                        {isProcessing === booking.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : null}
+                        Confirm Rejection
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleApprove(booking.id)}
+                      className="bg-success hover:bg-success/90"
+                      disabled={isProcessing === booking.id}
+                    >
+                      {isProcessing === booking.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Check className="h-4 w-4 mr-2" />
+                      )}
+                      Approve
+                    </Button>
+                    <Button
+                      onClick={() => handleRejectClick(booking.id)}
+                      variant="destructive"
+                      disabled={isProcessing === booking.id}
+                    >
                       <X className="h-4 w-4 mr-2" />
-                    )}
-                    Reject
-                  </Button>
-                </div>
+                      Reject
+                    </Button>
+                  </div>
+                )}
               </div>
             ))
           )}

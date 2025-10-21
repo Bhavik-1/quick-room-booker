@@ -183,10 +183,12 @@ export const getAllBookings = async (): Promise<Booking[]> => {
 export const updateBookingStatus = async (
   id: string,
   status: "approved" | "rejected",
+  rejectionReason?: string,
   approvedAt?: string
 ): Promise<any> => {
-  // send approved_at if provided so backend can store it
+  // send rejection_reason and approved_at if provided
   const payload: any = { status };
+  if (rejectionReason) payload.rejection_reason = rejectionReason;
   if (approvedAt) payload.approved_at = approvedAt;
   return api.put(`/bookings/${id}/status`, payload);
 };
