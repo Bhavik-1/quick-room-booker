@@ -79,7 +79,9 @@ router.post("/bulk", protect, admin, async (req, res) => {
   const userId = req.user.id;
 
   if (!bookings || !Array.isArray(bookings) || bookings.length === 0) {
-    return res.status(400).json({ message: "Invalid or empty bookings array." });
+    return res
+      .status(400)
+      .json({ message: "Invalid or empty bookings array." });
   }
 
   try {
@@ -189,7 +191,8 @@ router.post("/bulk", protect, admin, async (req, res) => {
       // 7. Calculate duration in hours
       const startParts = start_time_normalized.split(":");
       const endParts = end_time_normalized.split(":");
-      const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+      const startMinutes =
+        parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
       const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
       const duration = (endMinutes - startMinutes) / 60;
 
@@ -232,7 +235,16 @@ router.post("/bulk", protect, admin, async (req, res) => {
       // 9. Create booking immediately (no conflicts, valid)
       const [result] = await db.query(
         "INSERT INTO bookings (user_id, room_id, date, start_time, end_time, duration, purpose, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [userId, room_id, date, start_time_normalized, end_time_normalized, duration, purpose, "approved"]
+        [
+          userId,
+          room_id,
+          date,
+          start_time_normalized,
+          end_time_normalized,
+          duration,
+          purpose,
+          "approved",
+        ]
       );
 
       // 10. Create notification
@@ -276,7 +288,9 @@ router.post("/bulk/resolve", protect, admin, async (req, res) => {
   const userId = req.user.id;
 
   if (!resolutions || !Array.isArray(resolutions) || resolutions.length === 0) {
-    return res.status(400).json({ message: "Invalid or empty resolutions array." });
+    return res
+      .status(400)
+      .json({ message: "Invalid or empty resolutions array." });
   }
 
   try {
@@ -300,17 +314,31 @@ router.post("/bulk/resolve", protect, admin, async (req, res) => {
 
       if (action === "override") {
         // Force-book despite conflict
-        const { room_id, date, start_time, end_time, duration, purpose } = booking;
+        const { room_id, date, start_time, end_time, duration, purpose } =
+          booking;
 
         const [result] = await db.query(
           "INSERT INTO bookings (user_id, room_id, date, start_time, end_time, duration, purpose, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          [userId, room_id, date, start_time, end_time, duration, purpose, "approved"]
+          [
+            userId,
+            room_id,
+            date,
+            start_time,
+            end_time,
+            duration,
+            purpose,
+            "approved",
+          ]
         );
 
         // Create notification
         await db.query(
           "INSERT INTO notifications (booking_id, type, message) VALUES (?, ?, ?)",
-          [result.insertId, "email", `Booking force-approved by admin (override).`]
+          [
+            result.insertId,
+            "email",
+            `Booking force-approved by admin (override).`,
+          ]
         );
 
         // Get room name for response
@@ -450,6 +478,29 @@ router.put("/:id/status", protect, admin, async (req, res) => {
   } catch (error) {
     console.error(`Error updating booking ${id} status:`, error);
     res.status(500).json({ message: "Server error updating booking status" });
+  }
+});
+
+// GET /bookings  -> if ?admin=true then return all bookings with extra details (only for admins)
+router.get("/", async (req, res) => {
+  try {
+    const isAdminQuery = req.query.admin === "true";
+    if (isAdminQuery) {
+      // ensure user is admin (assumes auth middleware set req.user)
+      if (!req.user || req.user.role !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      // return full booking details (join with users/rooms as needed)
+      const rows = await db.getAllBookingsWithDetails(); // implement this helper in db.js
+      return res.json(rows);
+    }
+
+    // default: return bookings visible to the caller (student)
+    const rows = await db.getBookingsForUser(req.user ? req.user.id : null);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
