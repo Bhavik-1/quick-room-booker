@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllBookings, getVisibleBookings } from "@/lib/DataApi";
+import { getAllBookings, getVisibleBookings } from "@/lib/dataApi";
 import { Calendar, LogOut, ArrowLeft } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
