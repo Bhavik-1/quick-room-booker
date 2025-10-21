@@ -11,6 +11,8 @@ export const ApproveBookings = () => {
   // Initialize as null to signal loading, or empty array once data is fetched
   const [bookings, setBookings] = useState<Booking[] | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null); // To track which booking is being processed
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string>("");
 
   // --- Data Fetching Logic ---
   const fetchBookings = async () => {
