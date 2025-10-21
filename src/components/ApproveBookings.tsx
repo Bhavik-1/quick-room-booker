@@ -172,32 +172,59 @@ export const ApproveBookings = () => {
                   <p className="text-muted-foreground text-sm">Purpose</p>
                   <p className="text-sm">{booking.purpose}</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleApprove(booking.id)}
-                    className="bg-success hover:bg-success/90"
-                    disabled={isProcessing === booking.id}
-                  >
-                    {isProcessing === booking.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Check className="h-4 w-4 mr-2" />
-                    )}
-                    Approve
-                  </Button>
-                  <Button
-                    onClick={() => handleRejectClick(booking.id)}
-                    variant="destructive"
-                    disabled={isProcessing === booking.id}
-                  >
-                    {isProcessing === booking.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
+                {rejectingId === booking.id ? (
+                  <div>
+                    <textarea
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="Enter rejection reason (optional)"
+                      rows={3}
+                      className="w-full border border-border rounded-md p-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleCancelReject}
+                        variant="outline"
+                        disabled={isProcessing === booking.id}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => handleConfirmReject(booking.id)}
+                        variant="destructive"
+                        disabled={isProcessing === booking.id}
+                      >
+                        {isProcessing === booking.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : null}
+                        Confirm Rejection
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleApprove(booking.id)}
+                      className="bg-success hover:bg-success/90"
+                      disabled={isProcessing === booking.id}
+                    >
+                      {isProcessing === booking.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Check className="h-4 w-4 mr-2" />
+                      )}
+                      Approve
+                    </Button>
+                    <Button
+                      onClick={() => handleRejectClick(booking.id)}
+                      variant="destructive"
+                      disabled={isProcessing === booking.id}
+                    >
                       <X className="h-4 w-4 mr-2" />
-                    )}
-                    Reject
-                  </Button>
-                </div>
+                      Reject
+                    </Button>
+                  </div>
+                )}
               </div>
             ))
           )}
