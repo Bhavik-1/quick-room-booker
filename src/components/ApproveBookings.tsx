@@ -61,7 +61,36 @@ export const ApproveBookings = () => {
   };
 
   const handleApprove = (id: string) => handleUpdateStatus(id, "approved");
-  const handleReject = (id: string) => handleUpdateStatus(id, "rejected");
+  
+  const handleRejectClick = (id: string) => {
+    setRejectingId(id);
+    setRejectionReason("");
+  };
+
+  const handleCancelReject = () => {
+    setRejectingId(null);
+    setRejectionReason("");
+  };
+
+  const handleConfirmReject = async (id: string) => {
+    if (isProcessing) return;
+    
+    setIsProcessing(id);
+    
+    try {
+      await updateBookingStatus(id, "rejected", rejectionReason.trim() || undefined);
+      await fetchBookings();
+      toast.success("Booking rejected.");
+      setRejectingId(null);
+      setRejectionReason("");
+    } catch (error: any) {
+      console.error(`Failed to reject booking ${id}:`, error);
+      const message = error.response?.data?.message || "Rejection failed due to a server error.";
+      toast.error(message);
+    } finally {
+      setIsProcessing(null);
+    }
+  };
 
   // --- Helper Functions ---
   const getStatusColor = (status: string) => {
@@ -157,7 +186,7 @@ export const ApproveBookings = () => {
                     Approve
                   </Button>
                   <Button
-                    onClick={() => handleReject(booking.id)}
+                    onClick={() => handleRejectClick(booking.id)}
                     variant="destructive"
                     disabled={isProcessing === booking.id}
                   >
