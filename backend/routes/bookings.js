@@ -452,7 +452,7 @@ router.get("/visible", protect, async (req, res) => {
 // @route   PUT /api/bookings/:id/status (Admin only) - Approve/Reject
 // @desc    Update a booking status
 router.put("/:id/status", protect, admin, async (req, res) => {
-  const { status } = req.body;
+  const { status, rejection_reason } = req.body;
   const { id } = req.params;
 
   if (status !== "approved" && status !== "rejected") {
@@ -460,20 +460,83 @@ router.put("/:id/status", protect, admin, async (req, res) => {
   }
 
   try {
-    const [result] = await db.query(
-      "UPDATE bookings SET status = ? WHERE id = ?",
-      [status, id]
-    );
+    // Update booking status with conditional rejection_reason handling
+    let updateQuery;
+    let updateParams;
+
+    if (status === "rejected" && rejection_reason) {
+      updateQuery = "UPDATE bookings SET status = ?, rejection_reason = ? WHERE id = ?";
+      updateParams = [status, rejection_reason, id];
+    } else if (status === "rejected") {
+      updateQuery = "UPDATE bookings SET status = ?, rejection_reason = NULL WHERE id = ?";
+      updateParams = [status, id];
+    } else {
+      // status is "approved"
+      updateQuery = "UPDATE bookings SET status = ? WHERE id = ?";
+      updateParams = [status, id];
+    }
+
+    const [result] = await db.query(updateQuery, updateParams);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    // Trigger Notification on status change
-    await db.query(
-      "INSERT INTO notifications (booking_id, type, message) VALUES (?, ?, ?)",
-      [id, "email", `Your booking status has been updated to ${status}.`]
+    // Fetch user email and booking details for email notification
+    const [rows] = await db.query(
+      `SELECT 
+        b.room_id, b.date, b.start_time, b.end_time, b.duration, b.purpose, b.rejection_reason,
+        u.email AS user_email,
+        u.name AS user_name,
+        r.name AS room_name
+      FROM bookings b
+      JOIN users u ON b.user_id = u.id
+      JOIN rooms r ON b.room_id = r.id
+      WHERE b.id = ?`,
+      [id]
     );
+
+    if (rows.length === 0) {
+      console.error(`Booking ${id} not found after update`);
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    const bookingData = rows[0];
+
+    // Send appropriate email based on status
+    try {
+      if (status === "approved") {
+        await sendApprovalEmail(
+          bookingData.user_email,
+          bookingData.user_name,
+          {
+            roomName: bookingData.room_name,
+            date: bookingData.date,
+            startTime: bookingData.start_time,
+            endTime: bookingData.end_time,
+            duration: bookingData.duration,
+            purpose: bookingData.purpose
+          }
+        );
+      } else if (status === "rejected") {
+        await sendRejectionEmail(
+          bookingData.user_email,
+          bookingData.user_name,
+          {
+            roomName: bookingData.room_name,
+            date: bookingData.date,
+            startTime: bookingData.start_time,
+            endTime: bookingData.end_time,
+            duration: bookingData.duration,
+            purpose: bookingData.purpose
+          },
+          bookingData.rejection_reason
+        );
+      }
+    } catch (emailError) {
+      // Log email error but don't fail the entire operation
+      console.error(`Failed to send email for booking ${id}:`, emailError.message);
+    }
 
     res.json({ message: `Booking ${id} ${status} successfully` });
   } catch (error) {
