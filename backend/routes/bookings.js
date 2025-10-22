@@ -4,7 +4,10 @@ import express from "express";
 import db from "../db.js";
 import { protect, admin } from "../middleware/auth.js";
 import { checkAvailability } from "./rooms.js";
-import { sendApprovalEmail, sendRejectionEmail } from "../services/emailService.js";
+import {
+  sendApprovalEmail,
+  sendRejectionEmail,
+} from "../services/emailService.js";
 
 const router = express.Router();
 
@@ -465,10 +468,12 @@ router.put("/:id/status", protect, admin, async (req, res) => {
     let updateParams;
 
     if (status === "rejected" && rejection_reason) {
-      updateQuery = "UPDATE bookings SET status = ?, rejection_reason = ? WHERE id = ?";
+      updateQuery =
+        "UPDATE bookings SET status = ?, rejection_reason = ? WHERE id = ?";
       updateParams = [status, rejection_reason, id];
     } else if (status === "rejected") {
-      updateQuery = "UPDATE bookings SET status = ?, rejection_reason = NULL WHERE id = ?";
+      updateQuery =
+        "UPDATE bookings SET status = ?, rejection_reason = NULL WHERE id = ?";
       updateParams = [status, id];
     } else {
       // status is "approved"
@@ -506,18 +511,14 @@ router.put("/:id/status", protect, admin, async (req, res) => {
     // Send appropriate email based on status
     try {
       if (status === "approved") {
-        await sendApprovalEmail(
-          bookingData.user_email,
-          bookingData.user_name,
-          {
-            roomName: bookingData.room_name,
-            date: bookingData.date,
-            startTime: bookingData.start_time,
-            endTime: bookingData.end_time,
-            duration: bookingData.duration,
-            purpose: bookingData.purpose
-          }
-        );
+        await sendApprovalEmail(bookingData.user_email, bookingData.user_name, {
+          roomName: bookingData.room_name,
+          date: bookingData.date,
+          startTime: bookingData.start_time,
+          endTime: bookingData.end_time,
+          duration: bookingData.duration,
+          purpose: bookingData.purpose,
+        });
       } else if (status === "rejected") {
         await sendRejectionEmail(
           bookingData.user_email,
@@ -528,14 +529,17 @@ router.put("/:id/status", protect, admin, async (req, res) => {
             startTime: bookingData.start_time,
             endTime: bookingData.end_time,
             duration: bookingData.duration,
-            purpose: bookingData.purpose
+            purpose: bookingData.purpose,
           },
           bookingData.rejection_reason
         );
       }
     } catch (emailError) {
       // Log email error but don't fail the entire operation
-      console.error(`Failed to send email for booking ${id}:`, emailError.message);
+      console.error(
+        `Failed to send email for booking ${id}:`,
+        emailError.message
+      );
     }
 
     res.json({ message: `Booking ${id} ${status} successfully` });
