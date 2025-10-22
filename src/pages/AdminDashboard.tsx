@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,7 +15,12 @@ import { useAuth } from "@/contexts/AuthContext";
 // removed ApproveBookings import (we render pending inline)
 import { ManageRooms } from "@/components/ManageRooms";
 import { BulkBooking } from "@/components/BulkBooking";
-import { getAllBookings, updateBookingStatus, getRooms } from "@/lib/dataApi";
+import {
+  getAllBookings,
+  updateBookingStatus,
+  getRooms,
+  Room,
+} from "@/lib/dataApi";
 import {
   Calendar,
   LogOut,
@@ -22,6 +28,10 @@ import {
   Building,
   List,
   Upload,
+  Loader2,
+  X,
+  Filter,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import CalendarView from "./CalendarView";
@@ -39,16 +49,21 @@ const AdminDashboard = () => {
   const [pendingBookings, setPendingBookings] = useState<any[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
 
-  // Filter state for All Bookings tab
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [selectedRoomFilter, setSelectedRoomFilter] = useState("all");
-  const [filteredBookings, setFilteredBookings] = useState<any[]>([]);
-  const [rooms, setRooms] = useState<any[]>([]);
+  // --- FILTER STATES ---
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [filter, setFilter] = useState({
+    status: "all", // all, approved, rejected, pending
+    roomId: "all",
+    fromDate: "",
+    toDate: "",
+  });
 
-  // State for rejection modal
-  const [rejectingBooking, setRejectingBooking] = useState<any | null>(null);
-  const [rejectionReason, setRejectionReason] = useState("");
+  // REJECTION STATES
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string>("");
+  const [isProcessingUpdate, setIsProcessingUpdate] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     if (!user || user.role !== "admin") {
@@ -61,16 +76,35 @@ const AdminDashboard = () => {
     navigate("/login");
   };
 
+  // --- Filter Handlers ---
+  const handleFilterChange = (field: keyof typeof filter, value: string) => {
+    setFilter((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleClearFilters = () => {
+    setFilter({
+      status: "all",
+      roomId: "all",
+      fromDate: "",
+      toDate: "",
+    });
+  };
+
+  const hasActiveFilters = useMemo(() => {
+    return Object.values(filter).some((val) => val !== "all" && val !== "");
+  }, [filter]);
+
+  // --- Existing Fetch Logic ---
   const fetchAllBookings = useCallback(async () => {
     setLoadingAll(true);
     try {
       const data = await getAllBookings();
       const bookings = Array.isArray(data) ? data : [];
       setAllBookings(bookings);
-      setFilteredBookings(bookings);
     } catch (err) {
       console.error("Failed to fetch all bookings", err);
       toast.error("Failed to load bookings");
+      setAllBookings([]);
     } finally {
       setLoadingAll(false);
     }
@@ -104,77 +138,98 @@ const AdminDashboard = () => {
   }, []);
 
   useEffect(() => {
+    // Fetch rooms when the component mounts
+    fetchRooms();
+  }, [fetchRooms]);
+
+  useEffect(() => {
     if (activeTab === "all") {
       fetchAllBookings();
-      fetchRooms();
-      // Reset filters when tab becomes active
-      setFromDate("");
-      setToDate("");
-      setSelectedRoomFilter("all");
+      handleClearFilters(); // Reset filters when opening All Bookings tab
     }
-    if (activeTab === "approve") fetchPendingBookings();
-  }, [activeTab, fetchAllBookings, fetchPendingBookings, fetchRooms]);
+    if (activeTab === "approve") {
+      fetchPendingBookings();
+      // Ensure rejection is cleared when switching tabs
+      setRejectingId(null);
+      setRejectionReason("");
+    }
+  }, [activeTab, fetchAllBookings, fetchPendingBookings]);
 
-  const handleApplyFilters = () => {
+  // --- Memoized Filtering Logic ---
+  const filteredBookings = useMemo(() => {
+    if (allBookings.length === 0) return [];
+
     let filtered = [...allBookings];
 
-    // Apply date filters
-    if (fromDate || toDate) {
+    // 1. Status Filter
+    if (filter.status !== "all") {
+      filtered = filtered.filter(
+        (b) =>
+          String(b.status ?? b.booking_status).toLowerCase() === filter.status
+      );
+    }
+
+    // 2. Room Filter
+    if (filter.roomId !== "all") {
+      filtered = filtered.filter(
+        (b) => String(b.room_id ?? b.roomId) === filter.roomId
+      );
+    }
+
+    // 3. Date Range Filter
+    if (filter.fromDate || filter.toDate) {
       filtered = filtered.filter((b) => {
         const bookingDateStr = b.date ?? b.booking_date;
         if (!bookingDateStr) return false;
 
-        // Extract date portion (YYYY-MM-DD)
-        let dateOnly = bookingDateStr;
-        if (bookingDateStr.includes("T")) {
-          dateOnly = bookingDateStr.split("T")[0];
+        // Use a date object that combines date and time for accurate comparison
+        const bookingDateTime = new Date(
+          `${bookingDateStr}T${b.start_time ?? b.startTime ?? "00:00:00"}`
+        );
+        if (isNaN(bookingDateTime.getTime())) return false;
+
+        if (filter.fromDate) {
+          const from = new Date(filter.fromDate);
+          from.setHours(0, 0, 0, 0); // Start of the 'from' day
+          if (bookingDateTime < from) return false;
         }
 
-        const bookingDate = new Date(dateOnly);
-        if (isNaN(bookingDate.getTime())) return false;
-
-        // Compare dates
-        if (fromDate) {
-          const from = new Date(fromDate);
-          if (bookingDate < from) return false;
-        }
-        if (toDate) {
-          const to = new Date(toDate);
-          if (bookingDate > to) return false;
+        if (filter.toDate) {
+          const to = new Date(filter.toDate);
+          to.setHours(23, 59, 59, 999); // End of the 'to' day
+          if (bookingDateTime > to) return false;
         }
 
         return true;
       });
     }
 
-    // Apply room filter
-    if (selectedRoomFilter !== "all") {
-      filtered = filtered.filter(
-        (b) =>
-          String(b.room_id ?? b.roomId) === String(selectedRoomFilter)
+    // Sort chronologically (ascending date/time)
+    filtered.sort((a, b) => {
+      const dateA = new Date(
+        `${a.date ?? a.booking_date}T${
+          a.start_time ?? a.startTime ?? "00:00:00"
+        }`
       );
-    }
+      const dateB = new Date(
+        `${b.date ?? b.booking_date}T${
+          b.start_time ?? b.startTime ?? "00:00:00"
+        }`
+      );
+      return dateA.getTime() - dateB.getTime();
+    });
 
-    setFilteredBookings(filtered);
-    toast.success("Filters applied");
-  };
+    return filtered;
+  }, [allBookings, filter]);
 
-  const handleResetFilters = () => {
-    setFromDate("");
-    setToDate("");
-    setSelectedRoomFilter("all");
-    setFilteredBookings(allBookings);
-    toast.success("Filters cleared");
-  };
-
-  // Helper: parse backend date + time into a local Date (handles ISO datetime or date + time)
+  // Helper: parse backend date + time into a local Date (remains the same)
   const parseLocal = (dateStr?: string, timeStr?: string): Date | null => {
     if (!dateStr && !timeStr) return null;
     // If dateStr contains T (ISO), extract date part if timeStr provided
     try {
       if (dateStr && dateStr.includes("T") && timeStr) {
         const dateOnly = dateStr.split("T")[0]; // YYYY-MM-DD
-        const [y, m, d] = dateStr.split("-").map(Number);
+        const [y, m, d] = dateOnly.split("-").map(Number);
         const tm = String(timeStr)
           .trim()
           .match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -223,6 +278,9 @@ const AdminDashboard = () => {
 
   // Approve with conflict detection (shared by both tabs)
   const handleApprove = async (booking: any) => {
+    if (isProcessingUpdate) return;
+    setIsProcessingUpdate(booking.id);
+
     try {
       // build start/end for current booking
       const start = parseLocal(
@@ -286,43 +344,65 @@ const AdminDashboard = () => {
       }
 
       const approvedAt = new Date().toISOString();
-      await updateBookingStatus(String(booking.id), "approved", undefined, approvedAt);
+      await updateBookingStatus(
+        String(booking.id),
+        "approved",
+        undefined,
+        approvedAt
+      );
       toast.success("Booking approved");
+
+      // Clear rejection state if it was active
+      setRejectingId(null);
+      setRejectionReason("");
+
       // refresh list
       await fetchPendingBookings();
       await fetchAllBookings();
     } catch (err) {
       console.error("Approve failed", err);
       toast.error("Failed to approve booking");
+    } finally {
+      setIsProcessingUpdate(null);
     }
   };
 
-  const handleRejectClick = (booking: any) => {
-    setRejectingBooking(booking);
+  // Handlers for Rejection flow
+  const handleRejectClick = (id: string) => {
+    setRejectingId(id);
     setRejectionReason("");
   };
 
-  const handleConfirmReject = async () => {
-    if (!rejectingBooking) return;
-    
+  const handleCancelReject = () => {
+    setRejectingId(null);
+    setRejectionReason("");
+  };
+
+  const handleConfirmReject = async (booking: any) => {
+    if (isProcessingUpdate) return;
+    setIsProcessingUpdate(booking.id);
+
     try {
-      const reason = rejectionReason.trim() || undefined;
-      await updateBookingStatus(String(rejectingBooking.id), "rejected", reason);
+      // Pass the reason as the third argument (rejectionReason).
+      await updateBookingStatus(
+        String(booking.id),
+        "rejected",
+        rejectionReason.trim() || undefined
+      );
+
       toast.success("Booking rejected");
+      // Clear rejection state
+      setRejectingId(null);
+      setRejectionReason("");
+      // refresh list
       await fetchPendingBookings();
       await fetchAllBookings();
     } catch (err) {
       console.error("Reject failed", err);
       toast.error("Failed to reject booking");
     } finally {
-      setRejectingBooking(null);
-      setRejectionReason("");
+      setIsProcessingUpdate(null);
     }
-  };
-
-  const handleCancelReject = () => {
-    setRejectingBooking(null);
-    setRejectionReason("");
   };
 
   // format date as dd/mm/yyyy
@@ -369,7 +449,12 @@ const AdminDashboard = () => {
             <span className="text-sm text-muted-foreground">
               Welcome, {user?.name}
             </span>
-            <Button variant="outline" size="sm" onClick={handleLogout} className="hover:bg-slate-100 transition">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="hover:bg-slate-100 transition"
+            >
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -471,12 +556,24 @@ const AdminDashboard = () => {
                     <table className="w-full table-auto text-sm">
                       <thead className="bg-slate-50">
                         <tr className="text-left text-slate-600 border-b-2 border-slate-200">
-                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Room</th>
-                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">User</th>
-                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Date</th>
-                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Start</th>
-                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">End</th>
-                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Actions</th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                            Room
+                          </th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                            User
+                          </th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                            Start
+                          </th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                            End
+                          </th>
+                          <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                            Actions
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -490,7 +587,10 @@ const AdminDashboard = () => {
                             b.end_time ?? b.endTime ?? b.end
                           );
                           return (
-                            <tr key={b.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors">
+                            <tr
+                              key={b.id}
+                              className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors"
+                            >
                               <td className="px-4 py-4 align-top font-medium">
                                 {b.room_name ?? b.roomName}
                               </td>
@@ -519,23 +619,68 @@ const AdminDashboard = () => {
                                   : "-"}
                               </td>
                               <td className="px-4 py-4 align-top">
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    className="bg-green-600 hover:bg-green-700 text-white rounded-md"
-                                    onClick={() => handleApprove(b)}
-                                  >
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    className="rounded-md"
-                                    onClick={() => handleRejectClick(b)}
-                                  >
-                                    Reject
-                                  </Button>
-                                </div>
+                                {rejectingId === b.id ? (
+                                  // REJECT CONFIRMATION VIEW
+                                  <div className="space-y-2">
+                                    <Textarea
+                                      value={rejectionReason}
+                                      onChange={(e) =>
+                                        setRejectionReason(e.target.value)
+                                      }
+                                      placeholder="Enter rejection reason (optional)"
+                                      rows={2}
+                                      className="w-full text-sm resize-none"
+                                    />
+                                    <div className="flex gap-2">
+                                      <Button
+                                        onClick={handleCancelReject}
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={isProcessingUpdate === b.id}
+                                      >
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        onClick={() => handleConfirmReject(b)}
+                                        variant="destructive"
+                                        size="sm"
+                                        disabled={isProcessingUpdate === b.id}
+                                      >
+                                        {isProcessingUpdate === b.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                        ) : (
+                                          <X className="h-4 w-4 mr-1" />
+                                        )}
+                                        Confirm
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  // INITIAL ACTION BUTTONS
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      className="bg-green-600 hover:bg-green-700 text-white rounded-md"
+                                      onClick={() => handleApprove(b)}
+                                      disabled={isProcessingUpdate === b.id}
+                                    >
+                                      {isProcessingUpdate === b.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        "Approve"
+                                      )}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      className="rounded-md"
+                                      onClick={() => handleRejectClick(b.id)}
+                                      disabled={isProcessingUpdate === b.id}
+                                    >
+                                      Reject
+                                    </Button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           );
@@ -552,7 +697,7 @@ const AdminDashboard = () => {
             {activeTab === "bulk" && <BulkBooking />}
 
             {activeTab === "all" && (
-              <div>
+              <div className="md:col-span-3">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold">All Bookings</h2>
                   <div>
@@ -560,165 +705,210 @@ const AdminDashboard = () => {
                       onClick={fetchAllBookings}
                       variant="outline"
                       size="sm"
+                      disabled={loadingAll}
                     >
+                      <RefreshCw
+                        className={
+                          loadingAll
+                            ? "h-4 w-4 animate-spin mr-2"
+                            : "h-4 w-4 mr-2"
+                        }
+                      />
                       Refresh
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex gap-6">
-                  {/* Filter Sidebar */}
-                  <aside className="w-60 flex-shrink-0">
-                    <div className="bg-white border border-slate-200 rounded-xl shadow-md p-5">
-                      <h3 className="text-base font-semibold text-slate-900 mb-4">
-                        Filters
-                      </h3>
+                {/* --- FILTER CARD SECTION (MOVED ABOVE TABLE) --- */}
+                <div className="bg-white border border-slate-200 rounded-xl shadow-md p-5 mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                      <Filter className="h-5 w-5" />
+                      Filters
+                    </h3>
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearFilters}
+                        className="p-0 h-auto text-destructive hover:bg-transparent"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Clear Filters
+                      </Button>
+                    )}
+                  </div>
 
-                      {/* Date Range Section */}
-                      <div className="mb-4">
-                        <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 block">
-                          Date Range
-                        </Label>
-                        <div className="space-y-2">
-                          <Input
-                            type="date"
-                            value={fromDate}
-                            onChange={(e) => setFromDate(e.target.value)}
-                            className="text-sm"
-                            placeholder="From date"
-                          />
-                          <Input
-                            type="date"
-                            value={toDate}
-                            onChange={(e) => setToDate(e.target.value)}
-                            className="text-sm"
-                            placeholder="To date"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Room Filter Section */}
-                      <div className="mb-5">
-                        <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 block">
-                          Room
-                        </Label>
-                        <Select
-                          value={selectedRoomFilter}
-                          onValueChange={setSelectedRoomFilter}
-                        >
-                          <SelectTrigger className="text-sm">
-                            <SelectValue placeholder="All Rooms" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Rooms</SelectItem>
-                            {rooms.map((room) => (
-                              <SelectItem key={room.id} value={String(room.id)}>
-                                {room.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="space-y-2">
-                        <Button
-                          onClick={handleApplyFilters}
-                          className="w-full bg-blue-600 hover:bg-blue-700"
-                          size="sm"
-                        >
-                          Apply Filters
-                        </Button>
-                        <Button
-                          onClick={handleResetFilters}
-                          variant="outline"
-                          className="w-full"
-                          size="sm"
-                        >
-                          Reset
-                        </Button>
-                      </div>
-                    </div>
-                  </aside>
-
-                  {/* Table Section */}
-                  <div className="flex-1">
-                    <div className="text-sm text-slate-500 mb-3">
-                      Showing{" "}
-                      <span className="font-semibold text-slate-900">
-                        {filteredBookings.length}
-                      </span>{" "}
-                      results
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    {/* Status Filter */}
+                    <div className="space-y-1">
+                      <Label htmlFor="status">Status</Label>
+                      <Select
+                        value={filter.status}
+                        onValueChange={(val) =>
+                          handleFilterChange("status", val)
+                        }
+                      >
+                        <SelectTrigger id="status">
+                          <SelectValue placeholder="All Statuses" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Statuses</SelectItem>
+                          <SelectItem value="approved">Approved</SelectItem>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="rejected">Rejected</SelectItem>
+                          {/* NOTE: Statuses are normalized to lowercase by dataApi, but the list should match */}
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    <div className="overflow-auto bg-white p-4 rounded-xl border border-slate-200 shadow-md">
-                      {loadingAll ? (
-                        <div>Loading...</div>
-                      ) : filteredBookings.length === 0 ? (
-                        <div className="text-center py-8 text-slate-500">
-                          No bookings match the selected filters
-                        </div>
-                      ) : (
-                        <table className="w-full table-auto text-sm">
-                          <thead className="bg-slate-50">
-                            <tr className="text-left text-slate-600 border-b-2 border-slate-200">
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Room</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">User</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Date</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Start</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">End</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredBookings.map((b) => {
-                              const start = parseLocal(
-                                b.date ?? b.booking_date,
-                                b.start_time ?? b.startTime ?? b.start
-                              );
-                              const end = parseLocal(
-                                b.date ?? b.booking_date,
-                                b.end_time ?? b.endTime ?? b.end
-                              );
-                              return (
-                                <tr key={b.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors">
-                                  <td className="px-4 py-4 align-top font-medium">
-                                    {b.room_name ?? b.roomName}
-                                  </td>
-                                  <td className="px-4 py-4 align-top text-sm text-slate-700">
-                                    {b.user_name ?? b.userName}
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    {formatDateDMY(start)}
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    {start
-                                      ? start.toLocaleTimeString([], {
-                                          hour: "numeric",
-                                          minute: "2-digit",
-                                          hour12: true,
-                                        })
-                                      : "-"}
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    {end
-                                      ? end.toLocaleTimeString([], {
-                                          hour: "numeric",
-                                          minute: "2-digit",
-                                          hour12: true,
-                                        })
-                                      : "-"}
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    {statusBadge(b.status ?? b.booking_status)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      )}
+                    {/* Room Filter Section */}
+                    <div className="space-y-1">
+                      <Label htmlFor="room">Room</Label>
+                      <Select
+                        value={filter.roomId}
+                        onValueChange={(val) =>
+                          handleFilterChange("roomId", val)
+                        }
+                      >
+                        <SelectTrigger id="room" className="text-sm">
+                          <SelectValue placeholder="All Rooms" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Rooms</SelectItem>
+                          {rooms.map((room) => (
+                            <SelectItem key={room.id} value={String(room.id)}>
+                              {room.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
+
+                    {/* From Date Filter */}
+                    <div className="space-y-1">
+                      <Label htmlFor="fromDate">From Date</Label>
+                      <Input
+                        type="date"
+                        value={filter.fromDate}
+                        onChange={(e) =>
+                          handleFilterChange("fromDate", e.target.value)
+                        }
+                        className="text-sm"
+                      />
+                    </div>
+
+                    {/* To Date Filter */}
+                    <div className="space-y-1">
+                      <Label htmlFor="toDate">To Date</Label>
+                      <Input
+                        type="date"
+                        value={filter.toDate}
+                        onChange={(e) =>
+                          handleFilterChange("toDate", e.target.value)
+                        }
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {/* --- END FILTER CARD SECTION --- */}
+
+                {/* Table Section */}
+                <div>
+                  <div className="text-sm text-slate-500 mb-3">
+                    Showing{" "}
+                    <span className="font-semibold text-slate-900">
+                      {filteredBookings.length}
+                    </span>{" "}
+                    results out of{" "}
+                    <span className="font-semibold text-slate-900">
+                      {allBookings.length}
+                    </span>
+                  </div>
+
+                  <div className="overflow-auto bg-white p-4 rounded-xl border border-slate-200 shadow-md">
+                    {loadingAll ? (
+                      <div>Loading...</div>
+                    ) : filteredBookings.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500">
+                        No bookings match the selected filters
+                      </div>
+                    ) : (
+                      <table className="w-full table-auto text-sm">
+                        <thead className="bg-slate-50">
+                          <tr className="text-left text-slate-600 border-b-2 border-slate-200">
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                              Room
+                            </th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                              User
+                            </th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                              Date
+                            </th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                              Start
+                            </th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                              End
+                            </th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">
+                              Status
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredBookings.map((b) => {
+                            const start = parseLocal(
+                              b.date ?? b.booking_date,
+                              b.start_time ?? b.startTime ?? b.start
+                            );
+                            const end = parseLocal(
+                              b.date ?? b.booking_date,
+                              b.end_time ?? b.endTime ?? b.end
+                            );
+                            return (
+                              <tr
+                                key={b.id}
+                                className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors"
+                              >
+                                <td className="px-4 py-4 align-top font-medium">
+                                  {b.room_name ?? b.roomName}
+                                </td>
+                                <td className="px-4 py-4 align-top text-sm text-slate-700">
+                                  {b.user_name ?? b.userName}
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  {formatDateDMY(start)}
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  {start
+                                    ? start.toLocaleTimeString([], {
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                        hour12: true,
+                                      })
+                                    : "-"}
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  {end
+                                    ? end.toLocaleTimeString([], {
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                        hour12: true,
+                                      })
+                                    : "-"}
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  {statusBadge(b.status ?? b.booking_status)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 </div>
               </div>
@@ -747,51 +937,7 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* Rejection Modal */}
-      {rejectingBooking && (
-        <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
-          onClick={handleCancelReject}
-        >
-          <div
-            className="bg-white rounded-lg border-2 border-border shadow-xl p-6 w-full max-w-md"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold mb-4">
-              Reject Booking - {rejectingBooking.room_name ?? rejectingBooking.roomName}
-            </h3>
-            
-            <div className="mb-4">
-              <Label className="text-sm font-medium mb-2 block">
-                Rejection Reason (optional):
-              </Label>
-              <textarea
-                rows={4}
-                className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-sm"
-                placeholder="Enter reason for rejection..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-              />
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={handleCancelReject}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleConfirmReject}
-              >
-                Confirm Rejection
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Removed bottom CalendarView - calendar is now a sidebar tab */}
     </div>
   );
 };
