@@ -46,6 +46,10 @@ const AdminDashboard = () => {
   const [filteredBookings, setFilteredBookings] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
 
+  // State for rejection modal
+  const [rejectingBooking, setRejectingBooking] = useState<any | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
   useEffect(() => {
     if (!user || user.role !== "admin") {
       navigate("/login");
@@ -170,7 +174,7 @@ const AdminDashboard = () => {
     try {
       if (dateStr && dateStr.includes("T") && timeStr) {
         const dateOnly = dateStr.split("T")[0]; // YYYY-MM-DD
-        const [y, m, d] = dateOnly.split("-").map(Number);
+        const [y, m, d] = dateStr.split("-").map(Number);
         const tm = String(timeStr)
           .trim()
           .match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -282,7 +286,7 @@ const AdminDashboard = () => {
       }
 
       const approvedAt = new Date().toISOString();
-      await updateBookingStatus(String(booking.id), "approved", approvedAt);
+      await updateBookingStatus(String(booking.id), "approved", undefined, approvedAt);
       toast.success("Booking approved");
       // refresh list
       await fetchPendingBookings();
@@ -293,17 +297,32 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleReject = async (booking: any) => {
+  const handleRejectClick = (booking: any) => {
+    setRejectingBooking(booking);
+    setRejectionReason("");
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectingBooking) return;
+    
     try {
-      const rejectedAt = new Date().toISOString();
-      await updateBookingStatus(String(booking.id), "rejected", rejectedAt);
+      const reason = rejectionReason.trim() || undefined;
+      await updateBookingStatus(String(rejectingBooking.id), "rejected", reason);
       toast.success("Booking rejected");
       await fetchPendingBookings();
       await fetchAllBookings();
     } catch (err) {
       console.error("Reject failed", err);
       toast.error("Failed to reject booking");
+    } finally {
+      setRejectingBooking(null);
+      setRejectionReason("");
     }
+  };
+
+  const handleCancelReject = () => {
+    setRejectingBooking(null);
+    setRejectionReason("");
   };
 
   // format date as dd/mm/yyyy
@@ -512,7 +531,7 @@ const AdminDashboard = () => {
                                     size="sm"
                                     variant="destructive"
                                     className="rounded-md"
-                                    onClick={() => handleReject(b)}
+                                    onClick={() => handleRejectClick(b)}
                                   >
                                     Reject
                                   </Button>
@@ -728,7 +747,51 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
-      {/* Removed bottom CalendarView - calendar is now a sidebar tab */}
+
+      {/* Rejection Modal */}
+      {rejectingBooking && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+          onClick={handleCancelReject}
+        >
+          <div
+            className="bg-white rounded-lg border-2 border-border shadow-xl p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold mb-4">
+              Reject Booking - {rejectingBooking.room_name ?? rejectingBooking.roomName}
+            </h3>
+            
+            <div className="mb-4">
+              <Label className="text-sm font-medium mb-2 block">
+                Rejection Reason (optional):
+              </Label>
+              <textarea
+                rows={4}
+                className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                placeholder="Enter reason for rejection..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={handleCancelReject}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmReject}
+              >
+                Confirm Rejection
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
