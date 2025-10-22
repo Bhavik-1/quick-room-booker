@@ -174,7 +174,7 @@ const AdminDashboard = () => {
     try {
       if (dateStr && dateStr.includes("T") && timeStr) {
         const dateOnly = dateStr.split("T")[0]; // YYYY-MM-DD
-        const [y, m, d] = dateOnly.split("-").map(Number);
+        const [y, m, d] = dateStr.split("-").map(Number);
         const tm = String(timeStr)
           .trim()
           .match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -297,17 +297,32 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleReject = async (booking: any) => {
+  const handleRejectClick = (booking: any) => {
+    setRejectingBooking(booking);
+    setRejectionReason("");
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectingBooking) return;
+    
     try {
-      const rejectedAt = new Date().toISOString();
-      await updateBookingStatus(String(booking.id), "rejected", rejectedAt);
+      const reason = rejectionReason.trim() || undefined;
+      await updateBookingStatus(String(rejectingBooking.id), "rejected", reason);
       toast.success("Booking rejected");
       await fetchPendingBookings();
       await fetchAllBookings();
     } catch (err) {
       console.error("Reject failed", err);
       toast.error("Failed to reject booking");
+    } finally {
+      setRejectingBooking(null);
+      setRejectionReason("");
     }
+  };
+
+  const handleCancelReject = () => {
+    setRejectingBooking(null);
+    setRejectionReason("");
   };
 
   // format date as dd/mm/yyyy
@@ -516,7 +531,7 @@ const AdminDashboard = () => {
                                     size="sm"
                                     variant="destructive"
                                     className="rounded-md"
-                                    onClick={() => handleReject(b)}
+                                    onClick={() => handleRejectClick(b)}
                                   >
                                     Reject
                                   </Button>
