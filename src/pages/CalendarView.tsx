@@ -71,6 +71,7 @@ const CalendarView = ({
     status: (b.status ?? b.booking_status ?? "pending").toString(),
     purpose: b.purpose ?? b.title ?? b.reason ?? "",
     duration: Number(b.duration ?? b.hours ?? 0),
+    // ...other fields...
   });
 
   // Build a local "YYYY-MM-DDTHH:mm:ss" (no timezone) string so FullCalendar treats it as local
@@ -96,7 +97,7 @@ const CalendarView = ({
         if (dateMatch && timeMatch) {
           let year = Number(dateMatch[1]);
           let month = Number(dateMatch[2]) - 1;
-          let day = Number(dateMatch[3]);
+          let day = Number(dateMatch[3]) + 1;
           let hour = Number(timeMatch[1]);
           const minute = Number(timeMatch[2]);
           const second = Number(timeMatch[3] ?? 0);
@@ -106,7 +107,9 @@ const CalendarView = ({
             if (ap === "pm" && hour < 12) hour += 12;
             if (ap === "am" && hour === 12) hour = 0;
           }
-          const local = new Date(year, month, day + 1, hour, minute, second);
+          // The issue might be in date construction, using UTC methods then forcing local
+          // Simplified conversion by using Date(year, month, day, ...)
+          const local = new Date(year, month, day, hour, minute, second);
           return toLocalIsoNoTZ(local);
         }
       }
@@ -159,7 +162,15 @@ const CalendarView = ({
       Number(dateMatch[3]),
     ];
     const [hh = "00", mm = "00", ss = "00"] = timePart.split(":");
-    return new Date(year, month - 1, day, Number(hh), Number(mm), Number(ss));
+    // Note: month is 1-indexed from regex, but Date expects 0-indexed
+    return new Date(
+      year,
+      month - 1,
+      day + 1,
+      Number(hh),
+      Number(mm),
+      Number(ss)
+    );
   };
 
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -231,7 +242,7 @@ const CalendarView = ({
         // normalize all bookings
         const normalized = (fetched || []).map((b) => normalize(b));
 
-        // parse date/time and filter out rejected and pending bookings
+        // filter out rejected and pending bookings for display on calendar
         const mapped = normalized
           .map((b) => {
             const startIso = parseDateTime(b.date, b.startTime);
@@ -302,14 +313,6 @@ const CalendarView = ({
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-8">
-        <Skeleton className="h-10 w-full mb-8" />
-        <Skeleton className="h-[600px] w-full rounded-lg" />
-      </div>
-    );
-  }
   const formatTimeAMPM = (timeStr: string) => {
     if (!timeStr) return "";
     const [hourStr, minuteStr] = timeStr.split(":");
@@ -320,6 +323,7 @@ const CalendarView = ({
     if (hour === 0) hour = 12;
     return `${hour}:${minute.toString().padStart(2, "0")} ${ampm}`;
   };
+
   const formatDateDMY = (dateStr: string) => {
     if (!dateStr) return "";
     const d = new Date(dateStr);
@@ -329,6 +333,177 @@ const CalendarView = ({
     return `${day}/${month}/${year}`;
   };
 
+  const renderCalendar = () => (
+    <div className="bg-card p-6 rounded-xl border border-slate-200 shadow-md">
+      <FullCalendar
+        ref={calendarRef}
+        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+        initialView="dayGridMonth"
+        headerToolbar={{
+          left: "prev,next today",
+          center: "title",
+          right: "dayGridMonth,timeGridWeek,timeGridDay",
+        }}
+        events={events}
+        eventClick={(info) => setSelectedEvent(info.event.extendedProps)}
+        datesSet={handleDatesSet}
+        height="auto"
+        timeZone="local"
+        // Show events stacked (no horizontal overlap) so they are readable
+        slotEventOverlap={false}
+        // Start day/time grid at 06:00 and use 15m slots for better vertical resolution
+        slotMinTime={"06:00:00"}
+        slotDuration={"00:15:00"}
+        // Put current user's events first, then approved/booked, then pending/rejected, then by start time
+        eventOrder={(a: any, b: any) => {
+          const myId = String(user?.id ?? (user as any)?._id ?? "");
+          const aUser = String(
+            a.extendedProps?.userId ?? a.extendedProps?.user_id ?? ""
+          );
+          const bUser = String(
+            b.extendedProps?.userId ?? b.extendedProps?.user_id ?? ""
+          );
+          const aIsMine = aUser && aUser === myId;
+          const bIsMine = bUser && bUser === myId;
+          if (aIsMine && !bIsMine) return -1;
+          if (!aIsMine && bIsMine) return 1;
+          const order = { approved: 0, booked: 0, pending: 1, rejected: 2 };
+          const sa =
+            order[(a.extendedProps?.status as string) ?? "pending"] ?? 3;
+          const sb =
+            order[(b.extendedProps?.status as string) ?? "pending"] ?? 3;
+          if (sa !== sb) return sa - sb;
+          const ta = new Date(a.start).getTime();
+          const tb = new Date(b.start).getTime();
+          return ta - tb;
+        }}
+        // Keep month cells tidy
+        dayMaxEventRows={3}
+        // Render event blocks allowing wrapping so text doesn't truncate
+        eventContent={(arg) => {
+          const { roomName, userName, startTime, endTime, status } =
+            arg.event.extendedProps;
+          const bgColor =
+            status === "approved" || status === "booked"
+              ? "#22c55e"
+              : status === "rejected"
+              ? "#ef4444"
+              : "#eab308";
+          const textColor =
+            status === "approved" ||
+            status === "booked" ||
+            status === "rejected"
+              ? "#ffffff"
+              : "#000000";
+
+          return (
+            <div
+              style={{
+                padding: "0.25rem",
+                borderRadius: 6,
+                backgroundColor: bgColor,
+                color: textColor,
+                fontSize: "0.75rem",
+                lineHeight: 1.1,
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <strong style={{ fontSize: "0.82rem", marginBottom: 2 }}>
+                {roomName}
+              </strong>
+              <span style={{ fontSize: "0.72rem", opacity: 0.95 }}>
+                {userName}
+              </span>
+              <small style={{ fontSize: "0.68rem", opacity: 0.9 }}>
+                {formatTimeAMPM(startTime)} - {formatTimeAMPM(endTime)}
+              </small>
+            </div>
+          );
+        }}
+      />
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-8">
+        <Skeleton className="h-10 w-full mb-8" />
+        <Skeleton className="h-[600px] w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  // --- Conditional Rendering based on `detailed` prop ---
+  if (detailed) {
+    // Rendered when embedded in AdminDashboard, only render the calendar and dialog
+    return (
+      <>
+        {renderCalendar()}
+        <Dialog
+          open={!!selectedEvent}
+          onOpenChange={() => setSelectedEvent(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Booking Details</DialogTitle>
+            </DialogHeader>
+            {selectedEvent && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-semibold text-lg text-slate-900">
+                    {selectedEvent.roomName}
+                  </h3>
+                  <Badge className={getStatusColor(selectedEvent.status)}>
+                    {selectedEvent.status?.toUpperCase()}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                      Booked by
+                    </p>
+                    <p className="font-medium text-slate-900">
+                      {selectedEvent.userName}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                      Date
+                    </p>
+                    <p className="font-medium text-slate-900">
+                      {formatDateDMY(selectedEvent.date)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                      Time
+                    </p>
+                    <p className="font-medium text-slate-900">
+                      {formatTimeAMPM(selectedEvent.startTime)} -{" "}
+                      {formatTimeAMPM(selectedEvent.endTime)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                      Purpose
+                    </p>
+                    <p className="font-medium text-slate-900">
+                      {selectedEvent.purpose}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
+  // Standalone page rendering (original structure with full header and page wrapper)
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-card border-b border-border shadow-md">
@@ -353,7 +528,12 @@ const CalendarView = ({
             <span className="text-sm text-muted-foreground">
               Welcome, {user?.name}
             </span>
-            <Button variant="outline" size="sm" onClick={handleLogout} className="hover:bg-slate-100 transition">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="hover:bg-slate-100 transition"
+            >
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -361,99 +541,7 @@ const CalendarView = ({
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-card p-6 rounded-xl border border-slate-200 shadow-md">
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            headerToolbar={{
-              left: "prev,next today",
-              center: "title",
-              right: "dayGridMonth,timeGridWeek,timeGridDay",
-            }}
-            events={events}
-            eventClick={(info) => setSelectedEvent(info.event.extendedProps)}
-            datesSet={handleDatesSet}
-            height="auto"
-            timeZone="local"
-            // Show events stacked (no horizontal overlap) so they are readable
-            slotEventOverlap={false}
-            // Start day/time grid at 06:00 and use 15m slots for better vertical resolution
-            slotMinTime={"06:00:00"}
-            slotDuration={"00:15:00"}
-            // Put current user's events first, then approved/booked, then pending/rejected, then by start time
-            eventOrder={(a: any, b: any) => {
-              const myId = String(user?.id ?? (user as any)?._id ?? "");
-              const aUser = String(
-                a.extendedProps?.userId ?? a.extendedProps?.user_id ?? ""
-              );
-              const bUser = String(
-                b.extendedProps?.userId ?? b.extendedProps?.user_id ?? ""
-              );
-              const aIsMine = aUser && aUser === myId;
-              const bIsMine = bUser && bUser === myId;
-              if (aIsMine && !bIsMine) return -1;
-              if (!aIsMine && bIsMine) return 1;
-              const order = { approved: 0, booked: 0, pending: 1, rejected: 2 };
-              const sa =
-                order[(a.extendedProps?.status as string) ?? "pending"] ?? 3;
-              const sb =
-                order[(b.extendedProps?.status as string) ?? "pending"] ?? 3;
-              if (sa !== sb) return sa - sb;
-              const ta = new Date(a.start).getTime();
-              const tb = new Date(b.start).getTime();
-              return ta - tb;
-            }}
-            // Keep month cells tidy
-            dayMaxEventRows={3}
-            // Render event blocks allowing wrapping so text doesn't truncate
-            eventContent={(arg) => {
-              const { roomName, userName, startTime, endTime, status } =
-                arg.event.extendedProps;
-              const bgColor =
-                status === "approved" || status === "booked"
-                  ? "#22c55e"
-                  : status === "rejected"
-                  ? "#ef4444"
-                  : "#eab308";
-              const textColor =
-                status === "approved" ||
-                status === "booked" ||
-                status === "rejected"
-                  ? "#ffffff"
-                  : "#000000";
-
-              return (
-                <div
-                  style={{
-                    padding: "0.25rem",
-                    borderRadius: 6,
-                    backgroundColor: bgColor,
-                    color: textColor,
-                    fontSize: "0.75rem",
-                    lineHeight: 1.1,
-                    whiteSpace: "normal",
-                    wordBreak: "break-word",
-                    display: "flex",
-                    flexDirection: "column",
-                  }}
-                >
-                  <strong style={{ fontSize: "0.82rem", marginBottom: 2 }}>
-                    {roomName}
-                  </strong>
-                  <span style={{ fontSize: "0.72rem", opacity: 0.95 }}>
-                    {userName}
-                  </span>
-                  <small style={{ fontSize: "0.68rem", opacity: 0.9 }}>
-                    {formatTimeAMPM(startTime)} - {formatTimeAMPM(endTime)}
-                  </small>
-                </div>
-              );
-            }}
-          />
-        </div>
-      </div>
+      <div className="container mx-auto px-4 py-8">{renderCalendar()}</div>
 
       <Dialog
         open={!!selectedEvent}
@@ -475,25 +563,37 @@ const CalendarView = ({
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Booked by</p>
-                  <p className="font-medium text-slate-900">{selectedEvent.userName}</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Booked by
+                  </p>
+                  <p className="font-medium text-slate-900">
+                    {selectedEvent.userName}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Date</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Date
+                  </p>
                   <p className="font-medium text-slate-900">
                     {formatDateDMY(selectedEvent.date)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Time</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Time
+                  </p>
                   <p className="font-medium text-slate-900">
                     {formatTimeAMPM(selectedEvent.startTime)} -{" "}
                     {formatTimeAMPM(selectedEvent.endTime)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Purpose</p>
-                  <p className="font-medium text-slate-900">{selectedEvent.purpose}</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Purpose
+                  </p>
+                  <p className="font-medium text-slate-900">
+                    {selectedEvent.purpose}
+                  </p>
                 </div>
               </div>
             </div>
