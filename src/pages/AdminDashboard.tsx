@@ -286,7 +286,7 @@ const AdminDashboard = () => {
       }
 
       const approvedAt = new Date().toISOString();
-      await updateBookingStatus(String(booking.id), "approved", approvedAt);
+      await updateBookingStatus(String(booking.id), "approved", undefined, approvedAt);
       toast.success("Booking approved");
       // refresh list
       await fetchPendingBookings();
