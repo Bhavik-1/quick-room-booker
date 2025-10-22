@@ -747,7 +747,51 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
-      {/* Removed bottom CalendarView - calendar is now a sidebar tab */}
+
+      {/* Rejection Modal */}
+      {rejectingBooking && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+          onClick={handleCancelReject}
+        >
+          <div
+            className="bg-white rounded-lg border-2 border-border shadow-xl p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold mb-4">
+              Reject Booking - {rejectingBooking.room_name ?? rejectingBooking.roomName}
+            </h3>
+            
+            <div className="mb-4">
+              <Label className="text-sm font-medium mb-2 block">
+                Rejection Reason (optional):
+              </Label>
+              <textarea
+                rows={4}
+                className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                placeholder="Enter reason for rejection..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={handleCancelReject}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmReject}
+              >
+                Confirm Rejection
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
