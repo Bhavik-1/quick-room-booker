@@ -46,6 +46,10 @@ const AdminDashboard = () => {
   const [filteredBookings, setFilteredBookings] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
 
+  // State for rejection modal
+  const [rejectingBooking, setRejectingBooking] = useState<any | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
   useEffect(() => {
     if (!user || user.role !== "admin") {
       navigate("/login");
