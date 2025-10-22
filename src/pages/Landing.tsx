@@ -22,44 +22,56 @@ const Landing = () => {
   console.log("Landing component rendering");
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500">
+    // Updated background to a light grayish color (bg-slate-50)
+    <div className="min-h-screen w-full bg-slate-50">
       <div className="container mx-auto px-4 py-20">
         <div className="text-center mb-20">
           <div className="flex items-center justify-center mb-6">
-            <Calendar className="h-16 w-16 text-white drop-shadow-lg" />
+            <Calendar className="h-16 w-16 text-primary drop-shadow-sm" />
           </div>
-          <h1 className="text-6xl font-bold text-white mb-4 drop-shadow-lg">QuickRoom</h1>
-          <p className="text-2xl text-white/95 max-w-2xl mx-auto drop-shadow-md">
+          <h1 className="text-6xl font-bold text-foreground mb-4 tracking-tight">
+            QuickRoom
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
             College Room & Resource Booking System - Simple, Fast, Efficient
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 mb-16 max-w-5xl mx-auto">
-          <div className="bg-gradient-to-br from-blue-100 to-purple-100 p-8 rounded-xl shadow-xl border border-white/30 text-center hover:scale-105 transition-transform duration-200">
-            <div className="h-16 w-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
-              <Calendar className="h-8 w-8 text-white" />
+          {/* Feature Card 1 */}
+          <div className="bg-card p-8 rounded-xl border border-border shadow-lg text-center hover:shadow-xl transition-all duration-200">
+            <div className="h-16 w-16 mx-auto mb-4 bg-primary rounded-full flex items-center justify-center shadow-md">
+              <Calendar className="h-8 w-8 text-primary-foreground" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Easy Booking</h3>
+            <h3 className="text-xl font-bold mb-2 text-foreground">
+              Easy Booking
+            </h3>
             <p className="text-muted-foreground">
               Book rooms in seconds with our intuitive interface
             </p>
           </div>
-          <div className="bg-gradient-to-br from-purple-100 to-pink-100 p-8 rounded-xl shadow-xl border border-white/30 text-center hover:scale-105 transition-transform duration-200">
-            <div className="h-16 w-16 mx-auto mb-4 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg">
-              <Clock className="h-8 w-8 text-white" />
+
+          {/* Feature Card 2 */}
+          <div className="bg-card p-8 rounded-xl border border-border shadow-lg text-center hover:shadow-xl transition-all duration-200">
+            <div className="h-16 w-16 mx-auto mb-4 bg-primary rounded-full flex items-center justify-center shadow-md">
+              <Clock className="h-8 w-8 text-primary-foreground" />
             </div>
-            <h3 className="text-xl font-bold mb-2">
+            <h3 className="text-xl font-bold mb-2 text-foreground">
               Real-time Availability
             </h3>
             <p className="text-muted-foreground">
               Check room availability instantly
             </p>
           </div>
-          <div className="bg-gradient-to-br from-pink-100 to-blue-100 p-8 rounded-xl shadow-xl border border-white/30 text-center hover:scale-105 transition-transform duration-200">
-            <div className="h-16 w-16 mx-auto mb-4 bg-gradient-to-br from-pink-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg">
-              <Users className="h-8 w-8 text-white" />
+
+          {/* Feature Card 3 */}
+          <div className="bg-card p-8 rounded-xl border border-border shadow-lg text-center hover:shadow-xl transition-all duration-200">
+            <div className="h-16 w-16 mx-auto mb-4 bg-primary rounded-full flex items-center justify-center shadow-md">
+              <Users className="h-8 w-8 text-primary-foreground" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Admin Control</h3>
+            <h3 className="text-xl font-bold mb-2 text-foreground">
+              Admin Control
+            </h3>
             <p className="text-muted-foreground">
               Manage bookings and rooms efficiently
             </p>
@@ -67,10 +79,10 @@ const Landing = () => {
         </div>
 
         <div className="text-center">
-          <Button 
-            size="lg" 
-            onClick={() => navigate("/login")} 
-            className="px-12 py-6 shadow-2xl hover:scale-110 transition-all duration-200 text-lg"
+          <Button
+            size="lg"
+            onClick={() => navigate("/login")}
+            className="px-12 py-6 shadow-md hover:shadow-lg transition-all duration-200 text-lg"
           >
             Get Started
           </Button>
