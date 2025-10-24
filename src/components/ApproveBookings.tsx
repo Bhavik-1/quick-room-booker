@@ -61,7 +61,7 @@ export const ApproveBookings = () => {
   };
 
   const handleApprove = (id: string) => handleUpdateStatus(id, "approved");
-  
+
   const handleRejectClick = (id: string) => {
     setRejectingId(id);
     setRejectionReason("");
@@ -74,18 +74,24 @@ export const ApproveBookings = () => {
 
   const handleConfirmReject = async (id: string) => {
     if (isProcessing) return;
-    
+
     setIsProcessing(id);
-    
+
     try {
-      await updateBookingStatus(id, "rejected", rejectionReason.trim() || undefined);
+      await updateBookingStatus(
+        id,
+        "rejected",
+        rejectionReason.trim() || undefined
+      );
       await fetchBookings();
       toast.success("Booking rejected.");
       setRejectingId(null);
       setRejectionReason("");
     } catch (error: any) {
       console.error(`Failed to reject booking ${id}:`, error);
-      const message = error.response?.data?.message || "Rejection failed due to a server error.";
+      const message =
+        error.response?.data?.message ||
+        "Rejection failed due to a server error.";
       toast.error(message);
     } finally {
       setIsProcessing(null);
