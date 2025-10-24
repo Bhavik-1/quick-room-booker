@@ -29,7 +29,7 @@ const BOOKING_JOIN_CLAUSE = `
 // @desc    Create a new booking request
 router.post("/", protect, async (req, res) => {
   // Note: roomName and userName are calculated on the backend now.
-  const { roomId, date, startTime, endTime, duration, purpose } = req.body;
+  const { roomId, date, startTime, endTime, duration, purpose, resources } = req.body;
   const userId = req.user.id;
   // req.user.name is available for notification trigger if needed
 
@@ -60,15 +60,51 @@ router.post("/", protect, async (req, res) => {
       [userId, roomId, date, startTime, endTime, duration, purpose, "pending"]
     );
 
-    // 3. Trigger Notification (Simulated)
+    const bookingId = result.insertId;
+
+    // 3. Handle resources if provided
+    if (resources && Array.isArray(resources) && resources.length > 0) {
+      for (const resource of resources) {
+        try {
+          const { resourceId, quantity } = resource;
+          
+          if (!resourceId || !quantity || quantity < 1) {
+            console.warn(`Invalid resource data: ${JSON.stringify(resource)}`);
+            continue;
+          }
+
+          // Verify resource exists
+          const [resourceExists] = await db.query(
+            "SELECT id FROM resources WHERE id = ?",
+            [resourceId]
+          );
+
+          if (resourceExists.length === 0) {
+            console.warn(`Resource ${resourceId} not found, skipping`);
+            continue;
+          }
+
+          // Insert booking resource
+          await db.query(
+            "INSERT INTO booking_resources (booking_id, resource_id, quantity_requested) VALUES (?, ?, ?)",
+            [bookingId, resourceId, quantity]
+          );
+        } catch (resourceError) {
+          // Log but don't fail booking if resource insert fails
+          console.error(`Error inserting resource: ${resourceError.message}`);
+        }
+      }
+    }
+
+    // 4. Trigger Notification (Simulated)
     // We'd need to fetch the room name here if we want it in the message, but we'll simplify.
     await db.query(
       "INSERT INTO notifications (booking_id, type, message) VALUES (?, ?, ?)",
-      [result.insertId, "email", `Your booking is pending approval.`]
+      [bookingId, "email", `Your booking is pending approval.`]
     );
 
     res.status(201).json({
-      id: result.insertId,
+      id: bookingId,
       message: "Booking request submitted successfully! Pending approval.",
     });
   } catch (error) {
