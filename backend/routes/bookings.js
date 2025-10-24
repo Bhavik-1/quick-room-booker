@@ -873,6 +873,181 @@ router.put("/:id/status", protect, admin, async (req, res) => {
   }
 });
 
+// @route   PUT /api/bookings/:id (Student/User)
+// @desc    Update own pending booking
+router.put("/:id", protect, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { roomId, date, startTime, endTime, duration, purpose } = req.body;
+
+  try {
+    // 1. Fetch existing booking
+    const [bookings] = await db.query("SELECT * FROM bookings WHERE id = ?", [
+      id,
+    ]);
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    const existingBooking = bookings[0];
+
+    // 2. Verify ownership
+    if (existingBooking.user_id !== userId) {
+      return res.status(403).json({
+        message: "Unauthorized - You can only edit your own bookings",
+      });
+    }
+
+    // 3. Verify status is pending
+    if (existingBooking.status !== "pending") {
+      return res.status(403).json({
+        message: "Only pending bookings can be edited",
+      });
+    }
+
+    // 4. Merge with existing data (use new values if provided, otherwise keep old)
+    const updatedRoomId = roomId || existingBooking.room_id;
+    const updatedDate = date || existingBooking.date;
+    const updatedStartTime = startTime || existingBooking.start_time;
+    const updatedEndTime = endTime || existingBooking.end_time;
+    const updatedDuration =
+      duration !== undefined ? duration : existingBooking.duration;
+    const updatedPurpose = purpose || existingBooking.purpose;
+
+    // 5. Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(updatedDate)) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+
+    // 6. Validate date not in past
+    const bookingDate = new Date(updatedDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (bookingDate < today) {
+      return res.status(400).json({ message: "Cannot book dates in the past" });
+    }
+
+    // 7. Validate time format
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(updatedStartTime)) {
+      return res.status(400).json({ message: "Invalid time format" });
+    }
+    if (!timeRegex.test(updatedEndTime)) {
+      return res.status(400).json({ message: "Invalid time format" });
+    }
+
+    // 8. Validate time logic
+    if (updatedEndTime <= updatedStartTime) {
+      return res.status(400).json({
+        message: "End time must be after start time",
+      });
+    }
+
+    // 9. Verify room exists
+    const [rooms] = await db.query("SELECT id FROM rooms WHERE id = ?", [
+      updatedRoomId,
+    ]);
+    if (rooms.length === 0) {
+      return res.status(400).json({ message: "Room no longer exists" });
+    }
+
+    // 10. Check for conflicts (excluding current booking)
+    const [conflicts] = await db.query(
+      `SELECT COUNT(*) as count 
+       FROM bookings 
+       WHERE room_id = ? 
+         AND date = ? 
+         AND status = 'approved'
+         AND id != ?
+         AND NOT (end_time <= ? OR start_time >= ?)`,
+      [updatedRoomId, updatedDate, id, updatedStartTime, updatedEndTime]
+    );
+
+    if (conflicts[0].count > 0) {
+      return res.status(409).json({
+        message: "This time slot is no longer available",
+      });
+    }
+
+    // 11. Update booking
+    await db.query(
+      `UPDATE bookings 
+       SET room_id = ?, date = ?, start_time = ?, end_time = ?, duration = ?, purpose = ? 
+       WHERE id = ?`,
+      [
+        updatedRoomId,
+        updatedDate,
+        updatedStartTime,
+        updatedEndTime,
+        updatedDuration,
+        updatedPurpose,
+        id,
+      ]
+    );
+
+    // 12. Fetch updated booking with room name
+    const [updatedBookings] = await db.query(
+      `SELECT b.*, r.name AS room_name
+       FROM bookings b
+       JOIN rooms r ON b.room_id = r.id
+       WHERE b.id = ?`,
+      [id]
+    );
+
+    res.json({
+      message: "Booking updated successfully",
+      booking: updatedBookings[0],
+    });
+  } catch (error) {
+    console.error("Error updating booking:", error);
+    res.status(500).json({ message: "Server error updating booking" });
+  }
+});
+
+// @route   DELETE /api/bookings/:id (Student/User)
+// @desc    Delete own pending booking
+router.delete("/:id", protect, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    // 1. Fetch existing booking
+    const [bookings] = await db.query("SELECT * FROM bookings WHERE id = ?", [
+      id,
+    ]);
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    const existingBooking = bookings[0];
+
+    // 2. Verify ownership
+    if (existingBooking.user_id !== userId) {
+      return res.status(403).json({
+        message: "Unauthorized - You can only delete your own bookings",
+      });
+    }
+
+    // 3. Verify status is pending
+    if (existingBooking.status !== "pending") {
+      return res.status(403).json({
+        message: "Only pending bookings can be deleted",
+      });
+    }
+
+    // 4. Delete booking
+    await db.query("DELETE FROM bookings WHERE id = ?", [id]);
+
+    res.json({ message: "Booking deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting booking:", error);
+    res.status(500).json({ message: "Server error deleting booking" });
+  }
+});
+
 // GET /bookings  -> if ?admin=true then return all bookings with extra details (only for admins)
 router.get("/", async (req, res) => {
   try {
