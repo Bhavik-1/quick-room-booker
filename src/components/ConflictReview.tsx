@@ -84,6 +84,7 @@ export const ConflictReview: React.FC<ConflictReviewProps> = ({
     const resolutionArray = conflicts.map((conflict, index) => ({
       booking: conflict.booking,
       action: resolutions.get(index) || "cancel",
+      existing_bookings: conflict.existing_bookings,
     }));
     onResolve(resolutionArray);
   };
@@ -113,8 +114,9 @@ export const ConflictReview: React.FC<ConflictReviewProps> = ({
         <Card className="bg-yellow-50 border-yellow-200 mb-4">
           <CardContent className="pt-4">
             <p className="text-sm text-yellow-900">
-              The following bookings have time conflicts with existing approved bookings.
-              Please decide whether to override (force book) or cancel each booking.
+              The following bookings have time conflicts with existing approved
+              bookings. Please decide whether to override (force book) or cancel
+              each booking.
             </p>
           </CardContent>
         </Card>
@@ -151,7 +153,8 @@ export const ConflictReview: React.FC<ConflictReviewProps> = ({
                     </TableCell>
                     <TableCell>{conflict.booking.date}</TableCell>
                     <TableCell>
-                      {conflict.booking.start_time} - {conflict.booking.end_time}
+                      {conflict.booking.start_time} -{" "}
+                      {conflict.booking.end_time}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {conflict.booking.purpose}
@@ -163,7 +166,9 @@ export const ConflictReview: React.FC<ConflictReviewProps> = ({
                       <div className="flex gap-2 justify-center">
                         <Button
                           size="sm"
-                          variant={resolution === "override" ? "default" : "outline"}
+                          variant={
+                            resolution === "override" ? "default" : "outline"
+                          }
                           onClick={() => handleAction(index, "override")}
                           className={
                             resolution === "override"
@@ -178,7 +183,9 @@ export const ConflictReview: React.FC<ConflictReviewProps> = ({
                         </Button>
                         <Button
                           size="sm"
-                          variant={resolution === "cancel" ? "default" : "outline"}
+                          variant={
+                            resolution === "cancel" ? "default" : "outline"
+                          }
                           onClick={() => handleAction(index, "cancel")}
                           className={
                             resolution === "cancel"
