@@ -161,63 +161,85 @@ const AdminDashboard = () => {
 
     let filtered = [...allBookings];
 
-    // 1. Status Filter
+    // ... (Status and Room Filters remain the same)
     if (filter.status !== "all") {
       filtered = filtered.filter(
         (b) =>
           String(b.status ?? b.booking_status).toLowerCase() === filter.status
       );
     }
-
-    // 2. Room Filter
     if (filter.roomId !== "all") {
       filtered = filtered.filter(
         (b) => String(b.room_id ?? b.roomId) === filter.roomId
       );
     }
 
-    // 3. Date Range Filter
+    // 3. Date Range Filter (REVISED FIX)
     if (filter.fromDate || filter.toDate) {
+      // Pre-calculate filter date timestamps (normalized to start of day in local time)
+      const fromTimestamp = filter.fromDate
+        ? new Date(filter.fromDate).setHours(0, 0, 0, 0)
+        : null;
+
+      const toTimestamp = filter.toDate
+        ? new Date(filter.toDate).setHours(23, 59, 59, 999)
+        : null;
+
       filtered = filtered.filter((b) => {
-        const bookingDateStr = b.date ?? b.booking_date;
-        if (!bookingDateStr) return false;
+        const bookingDateSource = b.date ?? b.booking_date;
+        if (!bookingDateSource) return false;
 
-        // Use a date object that combines date and time for accurate comparison
-        const bookingDateTime = new Date(
-          `${bookingDateStr}T${b.start_time ?? b.startTime ?? "00:00:00"}`
-        );
-        if (isNaN(bookingDateTime.getTime())) return false;
+        // ⚠️ CRITICAL CHANGE: Create a consistent, comparable Date object for the booking.
+        // If bookingDateSource is already a full ISO string, new Date(string) works.
+        // If it's a date string like '10/23/2025', it's safer to use the original string.
 
-        if (filter.fromDate) {
-          const from = new Date(filter.fromDate);
-          from.setHours(0, 0, 0, 0); // Start of the 'from' day
-          if (bookingDateTime < from) return false;
+        // To be absolutely safe, we will create a Date object based ONLY on the date part,
+        // using the same manual parsing method from the last attempt but ensuring a valid Date.
+
+        let bookingDate;
+        try {
+          // Use the string as-is first. This often works for ISO 8601 timestamps.
+          bookingDate = new Date(bookingDateSource);
+
+          if (isNaN(bookingDate.getTime())) {
+            // If the first attempt fails (e.g., if it's 'DD/MM/YYYY'),
+            // try to parse just the YYYY-MM-DD part if it's available.
+
+            // Fallback: If your date is 'YYYY-MM-DD', this creates a local date.
+            const datePart = String(bookingDateSource).split("T")[0];
+            const parts = datePart.split("-");
+            // Note: This assumes YYYY-MM-DD. If your source date is different,
+            // we need to know its exact format!
+            if (parts.length === 3) {
+              bookingDate = new Date(
+                Number(parts[0]),
+                Number(parts[1]) - 1,
+                Number(parts[2])
+              );
+            } else {
+              // If all else fails, log it or skip it.
+              return false;
+            }
+          }
+        } catch {
+          return false; // Skip malformed dates
         }
 
-        if (filter.toDate) {
-          const to = new Date(filter.toDate);
-          to.setHours(23, 59, 59, 999); // End of the 'to' day
-          if (bookingDateTime > to) return false;
+        const bookingTimestamp = bookingDate.getTime();
+
+        // Check against the 'From' filter (must be >= start of 'from' day)
+        if (fromTimestamp !== null && bookingTimestamp < fromTimestamp) {
+          return false;
+        }
+
+        // Check against the 'To' filter (must be <= end of 'to' day)
+        if (toTimestamp !== null && bookingTimestamp > toTimestamp) {
+          return false;
         }
 
         return true;
       });
     }
-
-    // Sort chronologically (ascending date/time)
-    filtered.sort((a, b) => {
-      const dateA = new Date(
-        `${a.date ?? a.booking_date}T${
-          a.start_time ?? a.startTime ?? "00:00:00"
-        }`
-      );
-      const dateB = new Date(
-        `${b.date ?? b.booking_date}T${
-          b.start_time ?? b.startTime ?? "00:00:00"
-        }`
-      );
-      return dateA.getTime() - dateB.getTime();
-    });
 
     return filtered;
   }, [allBookings, filter]);
@@ -408,9 +430,20 @@ const AdminDashboard = () => {
   // format date as dd/mm/yyyy
   const formatDateDMY = (d?: Date | null) => {
     if (!d) return "-";
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
+
+    // Create a new Date object based on the input date's time value
+    // This prevents modifying the original 'd' object.
+    const nextDay = new Date(d.getTime());
+
+    // Add 1 to the current day.
+    // setDate() automatically handles month and year rollovers.
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    // Use the new date for formatting
+    const dd = String(nextDay.getDate()).padStart(2, "0");
+    const mm = String(nextDay.getMonth() + 1).padStart(2, "0");
+    const yyyy = nextDay.getFullYear();
+
     return `${dd}/${mm}/${yyyy}`;
   };
 
