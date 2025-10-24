@@ -144,47 +144,52 @@ export const MyBookings = () => {
 
     let filtered = [...allBookings];
 
-    // 1. Status Filter
+    // ... (Status and Room Filters remain the same)
     if (filter.status !== "all") {
-      filtered = filtered.filter((b) => b.status === filter.status);
+      filtered = filtered.filter(
+        (b) => String(b.status).toLowerCase() === filter.status
+      );
     }
-
-    // 2. Room Filter
     if (filter.roomId !== "all") {
       filtered = filtered.filter((b) => String(b.roomId) === filter.roomId);
     }
 
-    // 3. Date Range Filter
+    // 3. Date Range Filter (ULTRA-RELIABLE DATE-STRING COMPARISON)
     if (filter.fromDate || filter.toDate) {
-      filtered = filtered.filter((b) => {
-        // Use a date object that combines date and time for accurate comparison
-        const bookingDateTime = new Date(`${b.date}T${b.startTime}`);
-        if (isNaN(bookingDateTime.getTime())) return false;
+      // Filter dates (YYYY-MM-DD) are already correct strings from the input fields
+      const from = filter.fromDate;
+      const to = filter.toDate;
 
-        if (filter.fromDate) {
-          // Compare with start of the 'from' day
-          const from = new Date(filter.fromDate);
-          from.setHours(0, 0, 0, 0);
-          if (bookingDateTime < from) return false;
+      filtered = filtered.filter((b) => {
+        // Normalize the booking date to a comparable YYYY-MM-DD string
+        const bookingDateSource = b.date;
+        if (!bookingDateSource) return false;
+
+        // CRITICAL FIX: Extract the YYYY-MM-DD date part from the booking source string.
+        // This handles cases where the source is a full ISO timestamp (e.g., "2025-10-24T10:30:00.000Z")
+        // or just a date string (e.g., "2025-10-24").
+        const bookingDateStr = String(bookingDateSource).split("T")[0];
+
+        // Ensure the string is in YYYY-MM-DD format for lexicographical comparison
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingDateStr)) {
+          // If the format is still bad (e.g., DD/MM/YYYY), we can't compare it
+          return false;
         }
 
-        if (filter.toDate) {
-          // Compare with end of the 'to' day
-          const to = new Date(filter.toDate);
-          to.setHours(23, 59, 59, 999);
-          if (bookingDateTime > to) return false;
+        // Check against the 'From' filter (Lexicographical string comparison)
+        if (from && bookingDateStr < from) {
+          return false;
+        }
+
+        // Check against the 'To' filter (Lexicographical string comparison)
+        // This is safe because YYYY-MM-DD string comparison works like date comparison.
+        if (to && bookingDateStr > to) {
+          return false;
         }
 
         return true;
       });
     }
-
-    // Sort chronologically (ascending date/time)
-    filtered.sort((a, b) => {
-      const dateA = new Date(`${a.date}T${a.startTime}`);
-      const dateB = new Date(`${b.date}T${b.startTime}`);
-      return dateA.getTime() - dateB.getTime();
-    });
 
     return filtered;
   }, [allBookings, filter]);
