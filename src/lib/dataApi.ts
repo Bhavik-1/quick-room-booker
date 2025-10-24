@@ -22,6 +22,21 @@ export interface Booking {
   duration: number;
   purpose: string;
   status?: string;
+  resources?: BookingResource[];
+}
+
+export interface Resource {
+  id: string;
+  name: string;
+  type: string;
+  total_quantity: number;
+}
+
+export interface BookingResource {
+  resourceId: string;
+  resourceName: string;
+  resourceType: string;
+  quantityRequested: number;
 }
 
 // normalize facilities from many shapes into string[]
