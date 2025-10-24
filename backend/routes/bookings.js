@@ -596,6 +596,27 @@ router.get("/my", protect, async (req, res) => {
             ORDER BY b.date DESC, b.start_time DESC
         `;
     const [bookings] = await db.query(query, [req.user.id]);
+
+    // Fetch resources for each booking
+    for (const booking of bookings) {
+      const [resources] = await db.query(
+        `SELECT 
+            br.resource_id, br.quantity_requested,
+            res.name as resource_name, res.type as resource_type
+         FROM booking_resources br
+         JOIN resources res ON br.resource_id = res.id
+         WHERE br.booking_id = ?`,
+        [booking.id]
+      );
+
+      booking.resources = resources.map(r => ({
+        resourceId: String(r.resource_id),
+        resourceName: r.resource_name,
+        resourceType: r.resource_type,
+        quantityRequested: r.quantity_requested
+      }));
+    }
+
     res.json(bookings);
   } catch (error) {
     console.error("Error fetching user bookings:", error);
