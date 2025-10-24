@@ -193,6 +193,17 @@ export const updateBookingStatus = async (
   return api.put(`/bookings/${id}/status`, payload);
 };
 
+export const updateBooking = async (
+  id: string,
+  updates: Partial<Omit<Booking, "id" | "userId" | "userName" | "status">>
+): Promise<any> => {
+  return api.put(`/bookings/${id}`, updates);
+};
+
+export const deleteBooking = async (id: string): Promise<any> => {
+  return api.delete(`/bookings/${id}`);
+};
+
 export const bulkCreateBookings = async (bookings: any[]): Promise<any> => {
   const response = await api.post("/bookings/bulk", { bookings });
   return response.data;
