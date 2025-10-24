@@ -237,3 +237,52 @@ export const checkAvailability = () => {
 export const initializeStorage = () => {
   console.warn("initializeStorage is redundant: Data is now in MySQL.");
 };
+
+// --- RESOURCE API CALLS ---
+
+export const getResources = async (): Promise<Resource[]> => {
+  try {
+    const response = await api.get<any[]>("/resources");
+    if (!Array.isArray(response.data)) return [];
+    
+    return response.data.map((resource: any) => ({
+      id: String(resource.id),
+      name: resource.name,
+      type: resource.type,
+      total_quantity: Number(resource.total_quantity) || 1,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch resources:", error);
+    return [];
+  }
+};
+
+export const addResource = async (resource: Omit<Resource, "id">): Promise<any> => {
+  return api.post("/resources", resource);
+};
+
+export const updateResource = async (
+  id: string,
+  updates: Partial<Resource>
+): Promise<any> => {
+  return api.put(`/resources/${id}`, updates);
+};
+
+export const deleteResource = async (id: string): Promise<any> => {
+  return api.delete(`/resources/${id}`);
+};
+
+export const checkResourceAvailability = async (
+  resources: { resourceId: string; quantity: number }[],
+  date: string,
+  startTime: string,
+  endTime: string
+): Promise<any> => {
+  const response = await api.post("/resources/check-availability", {
+    resources,
+    date,
+    startTime,
+    endTime,
+  });
+  return response.data;
+};
