@@ -9,6 +9,14 @@ import {
   sendRejectionEmail,
   sendOverrideCancellationEmail,
 } from "../services/emailService.js";
+import {
+  addDays,
+  addWeeks,
+  addMonths,
+  format,
+  parseISO,
+  differenceInDays,
+} from "date-fns";
 
 const router = express.Router();
 
@@ -29,7 +37,8 @@ const BOOKING_JOIN_CLAUSE = `
 // @desc    Create a new booking request
 router.post("/", protect, async (req, res) => {
   // Note: roomName and userName are calculated on the backend now.
-  const { roomId, date, startTime, endTime, duration, purpose, resources } = req.body;
+  const { roomId, date, startTime, endTime, duration, purpose, resources } =
+    req.body;
   const userId = req.user.id;
   // req.user.name is available for notification trigger if needed
 
@@ -67,7 +76,7 @@ router.post("/", protect, async (req, res) => {
       for (const resource of resources) {
         try {
           const { resourceId, quantity } = resource;
-          
+
           if (!resourceId || !quantity || quantity < 1) {
             console.warn(`Invalid resource data: ${JSON.stringify(resource)}`);
             continue;
@@ -110,6 +119,242 @@ router.post("/", protect, async (req, res) => {
   } catch (error) {
     console.error("Error creating booking:", error);
     res.status(500).json({ message: "Server error creating booking" });
+  }
+});
+
+// @route   POST /api/bookings/recurring (Student/User)
+// @desc    Create multiple bookings based on recurring pattern
+router.post("/recurring", protect, async (req, res) => {
+  const {
+    roomId,
+    startDate,
+    startTime,
+    endTime,
+    duration,
+    purpose,
+    recurrencePattern,
+    endDate,
+    resources,
+  } = req.body;
+  const userId = req.user.id;
+
+  // 1. Validate required fields
+  if (
+    !roomId ||
+    !startDate ||
+    !startTime ||
+    !endTime ||
+    !purpose ||
+    !recurrencePattern ||
+    !endDate
+  ) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  try {
+    // 2. Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+
+    // 3. Validate time format (HH:MM)
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
+      return res.status(400).json({ message: "Invalid time format" });
+    }
+
+    // 4. Normalize time format to HH:MM
+    const normalizeTime = (time) => {
+      const [hours, minutes] = time.split(":");
+      return `${hours.padStart(2, "0")}:${minutes}`;
+    };
+    const startTimeNormalized = normalizeTime(startTime);
+    const endTimeNormalized = normalizeTime(endTime);
+
+    // 5. Validate time logic
+    if (endTimeNormalized <= startTimeNormalized) {
+      return res
+        .status(400)
+        .json({ message: "End time must be after start time" });
+    }
+
+    // 6. Validate date logic
+    const startDateObj = parseISO(startDate);
+    const endDateObj = parseISO(endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (startDateObj < today) {
+      return res.status(400).json({ message: "Invalid date range" });
+    }
+
+    if (endDateObj <= startDateObj) {
+      return res.status(400).json({ message: "Invalid date range" });
+    }
+
+    // 7. Validate 3 month maximum
+    const daysDiff = differenceInDays(endDateObj, startDateObj);
+    if (daysDiff > 90) {
+      return res
+        .status(400)
+        .json({
+          message: "Recurring bookings cannot exceed 3 months (90 days)",
+        });
+    }
+
+    // 8. Validate recurrence pattern
+    if (!["daily", "weekly", "monthly"].includes(recurrencePattern)) {
+      return res.status(400).json({ message: "Invalid recurrence pattern" });
+    }
+
+    // 9. Verify room exists
+    const [roomResults] = await db.query("SELECT id FROM rooms WHERE id = ?", [
+      roomId,
+    ]);
+    if (roomResults.length === 0) {
+      return res.status(400).json({ message: "Room not found" });
+    }
+
+    // 10. Generate dates based on recurrence pattern
+    const dates = [];
+    let currentDate = startDateObj;
+
+    while (currentDate <= endDateObj) {
+      dates.push(format(currentDate, "yyyy-MM-dd"));
+
+      if (recurrencePattern === "daily") {
+        currentDate = addDays(currentDate, 1);
+      } else if (recurrencePattern === "weekly") {
+        currentDate = addWeeks(currentDate, 1);
+      } else if (recurrencePattern === "monthly") {
+        currentDate = addMonths(currentDate, 1);
+      }
+    }
+
+    if (dates.length === 0) {
+      return res.status(400).json({ message: "No valid dates in range" });
+    }
+
+    // 11. Process each date - check conflicts and create bookings
+    const created = [];
+    const conflicts = [];
+
+    for (const date of dates) {
+      // Check availability
+      const isAvailable = await checkAvailability(
+        roomId,
+        date,
+        startTimeNormalized,
+        endTimeNormalized
+      );
+
+      if (isAvailable) {
+        // Create booking
+        const [result] = await db.query(
+          "INSERT INTO bookings (user_id, room_id, date, start_time, end_time, duration, purpose, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            userId,
+            roomId,
+            date,
+            startTimeNormalized,
+            endTimeNormalized,
+            duration,
+            purpose,
+            "pending",
+          ]
+        );
+
+        const bookingId = result.insertId;
+
+        // Handle resources if provided
+        if (resources && Array.isArray(resources) && resources.length > 0) {
+          for (const resource of resources) {
+            try {
+              const { resourceId, quantity } = resource;
+
+              if (!resourceId || !quantity || quantity < 1) {
+                console.warn(
+                  `Invalid resource data: ${JSON.stringify(resource)}`
+                );
+                continue;
+              }
+
+              // Verify resource exists
+              const [resourceExists] = await db.query(
+                "SELECT id FROM resources WHERE id = ?",
+                [resourceId]
+              );
+
+              if (resourceExists.length === 0) {
+                console.warn(`Resource ${resourceId} not found, skipping`);
+                continue;
+              }
+
+              // Insert booking resource
+              await db.query(
+                "INSERT INTO booking_resources (booking_id, resource_id, quantity_requested) VALUES (?, ?, ?)",
+                [bookingId, resourceId, quantity]
+              );
+            } catch (resourceError) {
+              console.error(
+                `Error inserting resource: ${resourceError.message}`
+              );
+            }
+          }
+        }
+
+        // Create notification
+        await db.query(
+          "INSERT INTO notifications (booking_id, type, message) VALUES (?, ?, ?)",
+          [bookingId, "email", "Your recurring booking is pending approval."]
+        );
+
+        created.push({
+          id: bookingId,
+          date,
+          start_time: startTimeNormalized,
+          end_time: endTimeNormalized,
+          duration,
+          purpose,
+        });
+      } else {
+        // Fetch conflicting booking details
+        const [existingBookings] = await db.query(
+          `SELECT b.id, u.name AS user_name, b.start_time, b.end_time, b.purpose
+           FROM bookings b
+           JOIN users u ON b.user_id = u.id
+           WHERE b.room_id = ?
+           AND b.date = ?
+           AND b.status = 'approved'
+           AND NOT (b.end_time <= ? OR b.start_time >= ?)`,
+          [roomId, date, startTimeNormalized, endTimeNormalized]
+        );
+
+        conflicts.push({
+          date,
+          start_time: startTimeNormalized,
+          end_time: endTimeNormalized,
+          existing_bookings: existingBookings,
+        });
+      }
+    }
+
+    // 12. Return categorized results
+    res.json({
+      created,
+      conflicts,
+      summary: {
+        total_dates: dates.length,
+        created: created.length,
+        conflicts: conflicts.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating recurring bookings:", error);
+    res
+      .status(500)
+      .json({ message: "Server error creating recurring bookings" });
   }
 });
 
@@ -609,11 +854,11 @@ router.get("/my", protect, async (req, res) => {
         [booking.id]
       );
 
-      booking.resources = resources.map(r => ({
+      booking.resources = resources.map((r) => ({
         resourceId: String(r.resource_id),
         resourceName: r.resource_name,
         resourceType: r.resource_type,
-        quantityRequested: r.quantity_requested
+        quantityRequested: r.quantity_requested,
       }));
     }
 
@@ -647,11 +892,11 @@ router.get("/all", protect, admin, async (req, res) => {
         [booking.id]
       );
 
-      booking.resources = resources.map(r => ({
+      booking.resources = resources.map((r) => ({
         resourceId: String(r.resource_id),
         resourceName: r.resource_name,
         resourceType: r.resource_type,
-        quantityRequested: r.quantity_requested
+        quantityRequested: r.quantity_requested,
       }));
     }
 
