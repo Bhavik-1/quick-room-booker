@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 // removed ApproveBookings import (we render pending inline)
 import { ManageRooms } from "@/components/ManageRooms";
+import { ManageResources } from "@/components/ManageResources";
 import { BulkBooking } from "@/components/BulkBooking";
 import {
   getAllBookings,
@@ -32,6 +33,7 @@ import {
   X,
   Filter,
   RefreshCw,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import CalendarView from "./CalendarView";
@@ -40,7 +42,7 @@ const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
-    "approve" | "rooms" | "all" | "bulk" | "calendar"
+    "approve" | "rooms" | "resources" | "all" | "bulk" | "calendar"
   >("approve");
 
   const [allBookings, setAllBookings] = useState<any[]>([]);
@@ -549,6 +551,18 @@ const AdminDashboard = () => {
               Manage Rooms
             </Button>
             <Button
+              variant={activeTab === "resources" ? "default" : "ghost"}
+              className={`w-full justify-start ${
+                activeTab === "resources"
+                  ? "bg-blue-50 text-blue-700 border-l-4 border-blue-600 font-medium"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+              onClick={() => setActiveTab("resources")}
+            >
+              <Package className="h-4 w-4 mr-2" />
+              Manage Resources
+            </Button>
+            <Button
               variant={activeTab === "bulk" ? "default" : "ghost"}
               className={`w-full justify-start ${
                 activeTab === "bulk"
@@ -726,6 +740,8 @@ const AdminDashboard = () => {
             )}
 
             {activeTab === "rooms" && <ManageRooms />}
+
+            {activeTab === "resources" && <ManageResources />}
 
             {activeTab === "bulk" && <BulkBooking />}
 

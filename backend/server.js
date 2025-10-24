@@ -11,6 +11,7 @@ import db from "./db.js";
 import authRoutes from "./routes/auth.js";
 import roomsRoutes from "./routes/rooms.js"; // <--- NEW: Import the default export
 import bookingsRoutes from "./routes/bookings.js"; // <--- NEW: Import the default export
+import resourcesRoutes from "./routes/resources.js";
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomsRoutes); // <--- Correct variable name
 app.use("/api/bookings", bookingsRoutes); // <--- Correct variable name
+app.use("/api/resources", resourcesRoutes);
 
 app.get("/", (req, res) => {
   res.send("QuickRoom API is running on " + process.env.PORT);

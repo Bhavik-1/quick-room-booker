@@ -29,7 +29,7 @@ const BOOKING_JOIN_CLAUSE = `
 // @desc    Create a new booking request
 router.post("/", protect, async (req, res) => {
   // Note: roomName and userName are calculated on the backend now.
-  const { roomId, date, startTime, endTime, duration, purpose } = req.body;
+  const { roomId, date, startTime, endTime, duration, purpose, resources } = req.body;
   const userId = req.user.id;
   // req.user.name is available for notification trigger if needed
 
@@ -60,15 +60,51 @@ router.post("/", protect, async (req, res) => {
       [userId, roomId, date, startTime, endTime, duration, purpose, "pending"]
     );
 
-    // 3. Trigger Notification (Simulated)
+    const bookingId = result.insertId;
+
+    // 3. Handle resources if provided
+    if (resources && Array.isArray(resources) && resources.length > 0) {
+      for (const resource of resources) {
+        try {
+          const { resourceId, quantity } = resource;
+          
+          if (!resourceId || !quantity || quantity < 1) {
+            console.warn(`Invalid resource data: ${JSON.stringify(resource)}`);
+            continue;
+          }
+
+          // Verify resource exists
+          const [resourceExists] = await db.query(
+            "SELECT id FROM resources WHERE id = ?",
+            [resourceId]
+          );
+
+          if (resourceExists.length === 0) {
+            console.warn(`Resource ${resourceId} not found, skipping`);
+            continue;
+          }
+
+          // Insert booking resource
+          await db.query(
+            "INSERT INTO booking_resources (booking_id, resource_id, quantity_requested) VALUES (?, ?, ?)",
+            [bookingId, resourceId, quantity]
+          );
+        } catch (resourceError) {
+          // Log but don't fail booking if resource insert fails
+          console.error(`Error inserting resource: ${resourceError.message}`);
+        }
+      }
+    }
+
+    // 4. Trigger Notification (Simulated)
     // We'd need to fetch the room name here if we want it in the message, but we'll simplify.
     await db.query(
       "INSERT INTO notifications (booking_id, type, message) VALUES (?, ?, ?)",
-      [result.insertId, "email", `Your booking is pending approval.`]
+      [bookingId, "email", `Your booking is pending approval.`]
     );
 
     res.status(201).json({
-      id: result.insertId,
+      id: bookingId,
       message: "Booking request submitted successfully! Pending approval.",
     });
   } catch (error) {
@@ -560,6 +596,27 @@ router.get("/my", protect, async (req, res) => {
             ORDER BY b.date DESC, b.start_time DESC
         `;
     const [bookings] = await db.query(query, [req.user.id]);
+
+    // Fetch resources for each booking
+    for (const booking of bookings) {
+      const [resources] = await db.query(
+        `SELECT 
+            br.resource_id, br.quantity_requested,
+            res.name as resource_name, res.type as resource_type
+         FROM booking_resources br
+         JOIN resources res ON br.resource_id = res.id
+         WHERE br.booking_id = ?`,
+        [booking.id]
+      );
+
+      booking.resources = resources.map(r => ({
+        resourceId: String(r.resource_id),
+        resourceName: r.resource_name,
+        resourceType: r.resource_type,
+        quantityRequested: r.quantity_requested
+      }));
+    }
+
     res.json(bookings);
   } catch (error) {
     console.error("Error fetching user bookings:", error);
@@ -577,6 +634,27 @@ router.get("/all", protect, admin, async (req, res) => {
             ORDER BY b.date ASC, b.start_time ASC
         `;
     const [bookings] = await db.query(query);
+
+    // Fetch resources for each booking
+    for (const booking of bookings) {
+      const [resources] = await db.query(
+        `SELECT 
+            br.resource_id, br.quantity_requested,
+            res.name as resource_name, res.type as resource_type
+         FROM booking_resources br
+         JOIN resources res ON br.resource_id = res.id
+         WHERE br.booking_id = ?`,
+        [booking.id]
+      );
+
+      booking.resources = resources.map(r => ({
+        resourceId: String(r.resource_id),
+        resourceName: r.resource_name,
+        resourceType: r.resource_type,
+        quantityRequested: r.quantity_requested
+      }));
+    }
+
     res.json(bookings);
   } catch (error) {
     console.error("Error fetching all bookings:", error);
