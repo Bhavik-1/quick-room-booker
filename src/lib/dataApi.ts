@@ -135,9 +135,29 @@ export const deleteRoom = async (id: string): Promise<any> => {
 // --- BOOKING API CALLS ---
 
 export const addBooking = async (
-  booking: Omit<Booking, "id" | "createdAt" | "status">
+  booking: Omit<Booking, "id" | "createdAt" | "status"> & {
+    resources?: Array<{ resourceId: string; quantity: number }>;
+  }
 ): Promise<any> => {
   return api.post("/bookings", booking);
+};
+
+export const createRecurringBooking = async (bookingData: {
+  userId: string;
+  userName: string;
+  roomId: string;
+  roomName: string;
+  startDate: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  purpose: string;
+  recurrencePattern: "daily" | "weekly" | "monthly";
+  endDate: string;
+  resources?: Array<{ resourceId: string; quantity: number }>;
+}) => {
+  const response = await api.post("/bookings/recurring", bookingData);
+  return response.data;
 };
 
 export const getMyBookings = async (): Promise<Booking[]> => {
@@ -244,7 +264,7 @@ export const getResources = async (): Promise<Resource[]> => {
   try {
     const response = await api.get<any[]>("/resources");
     if (!Array.isArray(response.data)) return [];
-    
+
     return response.data.map((resource: any) => ({
       id: String(resource.id),
       name: resource.name,
@@ -257,7 +277,9 @@ export const getResources = async (): Promise<Resource[]> => {
   }
 };
 
-export const addResource = async (resource: Omit<Resource, "id">): Promise<any> => {
+export const addResource = async (
+  resource: Omit<Resource, "id">
+): Promise<any> => {
   return api.post("/resources", resource);
 };
 
