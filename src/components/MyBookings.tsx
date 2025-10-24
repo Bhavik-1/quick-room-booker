@@ -4,36 +4,54 @@ import {
   getMyBookings,
   getAllBookings,
   Booking as ApiBooking,
-  getRooms, // <--- ADDED
-  Room, // <--- ADDED
+  getRooms,
+  Room,
+  updateBooking,
+  deleteBooking,
 } from "@/lib/dataApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Filter, X } from "lucide-react"; // Added Filter, X
-import { Input } from "@/components/ui/input"; // <--- ADDED
-import { Label } from "@/components/ui/label"; // <--- ADDED
+import { RefreshCw, Filter, X, Edit, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Select, // <--- ADDED
-  SelectContent, // <--- ADDED
-  SelectItem, // <--- ADDED
-  SelectTrigger, // <--- ADDED
-  SelectValue, // <--- ADDED
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
-type Booking = ApiBooking & { createdAt?: string }; // normalize naming locally
+type Booking = ApiBooking & { createdAt?: string };
 
 export const MyBookings = () => {
   const { user } = useAuth();
-  const [allBookings, setAllBookings] = useState<Booking[] | null>(null); // Stores the unfiltered list
-  const [rooms, setRooms] = useState<Room[]>([]); // Stores the list of all rooms for filtering
+  const [allBookings, setAllBookings] = useState<Booking[] | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // --- FILTER STATES ---
+  // Edit/Delete states
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
+  const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<Booking>>({});
+  const [errorMessage, setErrorMessage] = useState("");
+
+  // Filter states
   const [filter, setFilter] = useState({
-    status: "all", // all, approved, rejected, pending
+    status: "all",
     roomId: "all",
     fromDate: "",
     toDate: "",
@@ -137,6 +155,174 @@ export const MyBookings = () => {
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
+
+  // --- Edit/Delete Handlers ---
+
+  const handleEditClick = (booking: Booking) => {
+    // Normalize date to YYYY-MM-DD format
+    let normalizedDate = booking.date || "";
+    if (normalizedDate) {
+      // Extract YYYY-MM-DD from ISO timestamp or keep as-is if already in correct format
+      normalizedDate = normalizedDate.split("T")[0];
+    }
+
+    // Normalize times to HH:MM format (ensure 2-digit hours and minutes)
+    const normalizeTime = (time: string) => {
+      if (!time) return "";
+
+      // Remove any extra whitespace
+      time = time.trim();
+
+      // Split by colon
+      const parts = time.split(":");
+      if (parts.length < 2) return "";
+
+      const hours = parts[0] || "00";
+      const minutes = parts[1] || "00";
+
+      // Pad to 2 digits
+      return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
+    };
+
+    setEditingBooking(booking);
+    setEditFormData({
+      roomId: booking.roomId || "",
+      roomName: booking.roomName || "",
+      date: normalizedDate,
+      startTime: normalizeTime(booking.startTime || ""),
+      endTime: normalizeTime(booking.endTime || ""),
+      duration: booking.duration || 0,
+      purpose: booking.purpose || "",
+    });
+    setErrorMessage("");
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteClick = (booking: Booking) => {
+    setDeletingBooking(booking);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBooking) return;
+
+    // Client-side validation
+    if (
+      !editFormData.roomId ||
+      !editFormData.date ||
+      !editFormData.startTime ||
+      !editFormData.endTime ||
+      !editFormData.purpose
+    ) {
+      setErrorMessage("All fields are required");
+      return;
+    }
+
+    const bookingDate = new Date(editFormData.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (bookingDate < today) {
+      setErrorMessage("Cannot book dates in the past");
+      return;
+    }
+
+    if (editFormData.endTime! <= editFormData.startTime!) {
+      setErrorMessage("End time must be after start time");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      await updateBooking(editingBooking.id, {
+        roomId: editFormData.roomId,
+        date: editFormData.date,
+        startTime: editFormData.startTime,
+        endTime: editFormData.endTime,
+        duration: editFormData.duration,
+        purpose: editFormData.purpose,
+      });
+
+      toast.success("Booking updated successfully");
+      setIsEditDialogOpen(false);
+      setEditingBooking(null);
+      setEditFormData({});
+
+      // Refresh bookings list
+      await fetchInitialData();
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        setErrorMessage(
+          "This time slot is no longer available. Please choose a different time."
+        );
+      } else if (error.response?.status === 403) {
+        setErrorMessage("This booking can no longer be edited.");
+      } else if (error.response?.data?.message) {
+        setErrorMessage(error.response.data.message);
+      } else {
+        setErrorMessage("Failed to update booking. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingBooking) return;
+
+    setIsSubmitting(true);
+
+    try {
+      await deleteBooking(deletingBooking.id);
+
+      toast.success("Booking deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setDeletingBooking(null);
+
+      // Refresh bookings list
+      await fetchInitialData();
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        toast.error("This booking can no longer be deleted.");
+      } else if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else {
+        toast.error("Failed to delete booking. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+      setIsDeleteDialogOpen(false);
+      setDeletingBooking(null);
+    }
+  };
+
+  const handleEditCancel = () => {
+    setIsEditDialogOpen(false);
+    setEditingBooking(null);
+    setEditFormData({});
+    setErrorMessage("");
+  };
+
+  const handleDeleteCancel = () => {
+    setIsDeleteDialogOpen(false);
+    setDeletingBooking(null);
+  };
+
+  // Calculate duration from start and end times
+  useEffect(() => {
+    if (editFormData.startTime && editFormData.endTime) {
+      const [startHour, startMin] = editFormData.startTime
+        .split(":")
+        .map(Number);
+      const [endHour, endMin] = editFormData.endTime.split(":").map(Number);
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      const newDuration = (endMinutes - startMinutes) / 60;
+      setEditFormData((prev) => ({ ...prev, duration: newDuration }));
+    }
+  }, [editFormData.startTime, editFormData.endTime]);
 
   // --- Filtering Logic (memoized) ---
   const filteredBookings = useMemo(() => {
@@ -245,7 +431,7 @@ export const MyBookings = () => {
         </Button>
       </div>
 
-      {/* --- FILTER SECTION --- */}
+      {/* Filter Section */}
       <Card className="bg-slate-50 border-slate-200 shadow-md">
         <CardHeader className="p-4 flex flex-row items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
@@ -330,7 +516,6 @@ export const MyBookings = () => {
           </div>
         </CardContent>
       </Card>
-      {/* --- END FILTER SECTION --- */}
 
       {bookingsToDisplay.length === 0 ? (
         <Card className="border-slate-200 rounded-xl shadow-md">
@@ -392,10 +577,202 @@ export const MyBookings = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Edit/Delete Buttons - Only for pending bookings */}
+              {booking.status === "pending" && (
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditClick(booking)}
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit Booking
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeleteClick(booking)}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Booking
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Booking</DialogTitle>
+          </DialogHeader>
+          {errorMessage && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {errorMessage}
+            </div>
+          )}
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-room">Room</Label>
+              <Select
+                value={editFormData.roomId}
+                onValueChange={(val) =>
+                  setEditFormData({ ...editFormData, roomId: val })
+                }
+              >
+                <SelectTrigger id="edit-room">
+                  <SelectValue placeholder="Select a room" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rooms.map((room) => (
+                    <SelectItem key={room.id} value={String(room.id)}>
+                      {room.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-date">Date</Label>
+              <Input
+                id="edit-date"
+                type="date"
+                value={editFormData.date}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, date: e.target.value })
+                }
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-start-time">Start Time</Label>
+                <Input
+                  id="edit-start-time"
+                  type="time"
+                  value={editFormData.startTime}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      startTime: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-end-time">End Time</Label>
+                <Input
+                  id="edit-end-time"
+                  type="time"
+                  value={editFormData.endTime}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      endTime: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-duration">Duration (hours)</Label>
+              <Input
+                id="edit-duration"
+                type="number"
+                value={editFormData.duration || ""}
+                readOnly
+                className="bg-slate-50"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-purpose">Purpose</Label>
+              <Input
+                id="edit-purpose"
+                value={editFormData.purpose}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, purpose: e.target.value })
+                }
+                required
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleEditCancel}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Booking</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            Are you sure you want to delete this booking?
+          </p>
+          {deletingBooking && (
+            <div className="bg-slate-50 p-4 rounded space-y-2 text-sm">
+              <p>
+                <strong>Room:</strong> {deletingBooking.roomName}
+              </p>
+              <p>
+                <strong>Date:</strong>{" "}
+                {new Date(deletingBooking.date).toLocaleDateString()}
+              </p>
+              <p>
+                <strong>Time:</strong> {deletingBooking.startTime} -{" "}
+                {deletingBooking.endTime}
+              </p>
+              <p>
+                <strong>Purpose:</strong> {deletingBooking.purpose}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDeleteCancel}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
