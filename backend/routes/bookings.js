@@ -7,6 +7,7 @@ import { checkAvailability } from "./rooms.js";
 import {
   sendApprovalEmail,
   sendRejectionEmail,
+  sendOverrideCancellationEmail,
 } from "../services/emailService.js";
 
 const router = express.Router();
@@ -300,9 +301,17 @@ router.post("/bulk/resolve", protect, admin, async (req, res) => {
   try {
     const created = [];
     const cancelled = [];
+    const rejected = [];
 
     for (const resolution of resolutions) {
-      const { booking, action } = resolution;
+      const { booking, action, existing_bookings } = resolution;
+
+      console.log("🔍 Processing resolution:", {
+        action,
+        room_name: booking.room_name,
+        existing_bookings_count: existing_bookings?.length || 0,
+        existing_bookings_ids: existing_bookings?.map((b) => b.id) || [],
+      });
 
       if (action === "cancel") {
         // Skip this booking
@@ -335,6 +344,8 @@ router.post("/bulk/resolve", protect, admin, async (req, res) => {
           ]
         );
 
+        console.log("✅ New booking created:", result.insertId);
+
         // Create notification
         await db.query(
           "INSERT INTO notifications (booking_id, type, message) VALUES (?, ?, ?)",
@@ -359,12 +370,178 @@ router.post("/bulk/resolve", protect, admin, async (req, res) => {
           end_time,
           purpose,
         });
+
+        // Handle conflicting bookings - update to rejected and send emails
+        console.log("🔍 Checking for conflicting bookings to update...");
+        console.log(
+          "existing_bookings:",
+          JSON.stringify(existing_bookings, null, 2)
+        );
+
+        if (existing_bookings && existing_bookings.length > 0) {
+          const conflictingBookingIds = existing_bookings.map((b) => b.id);
+
+          console.log(
+            "📋 Conflicting booking IDs to update:",
+            conflictingBookingIds
+          );
+
+          // Build rejection reason with details about the new booking
+          const rejectionReason = `Admin force-approved a conflicting booking by ${req.user.name} for ${purpose} on ${date} from ${start_time} to ${end_time}`;
+
+          console.log("📝 Rejection reason:", rejectionReason);
+
+          // Update all conflicting bookings to rejected status
+          for (const conflictingId of conflictingBookingIds) {
+            try {
+              console.log(
+                `🔄 Updating booking ${conflictingId} to rejected...`
+              );
+
+              const [updateResult] = await db.query(
+                "UPDATE bookings SET status = ?, rejection_reason = ? WHERE id = ?",
+                ["rejected", rejectionReason, conflictingId]
+              );
+
+              console.log(`📊 Update result for booking ${conflictingId}:`, {
+                affectedRows: updateResult.affectedRows,
+                changedRows: updateResult.changedRows,
+                warningCount: updateResult.warningCount,
+              });
+
+              if (updateResult.affectedRows === 0) {
+                console.warn(
+                  `⚠️ Booking ${conflictingId} not found or already updated`
+                );
+              } else {
+                console.log(
+                  `✅ Successfully updated booking ${conflictingId} to rejected`
+                );
+              }
+            } catch (updateError) {
+              console.error(
+                `❌ Failed to update booking ${conflictingId}:`,
+                updateError.message
+              );
+              console.error("Full error:", updateError);
+            }
+          }
+
+          // Fetch affected users' details for email notifications
+          if (conflictingBookingIds.length > 0) {
+            try {
+              const placeholders = conflictingBookingIds
+                .map(() => "?")
+                .join(",");
+              console.log(
+                `🔍 Fetching affected bookings with IDs: ${conflictingBookingIds.join(
+                  ", "
+                )}`
+              );
+
+              const [affectedBookings] = await db.query(
+                `SELECT 
+                  b.id, b.room_id, b.date, b.start_time, b.end_time, b.duration, b.purpose, b.rejection_reason, b.status,
+                  u.email AS user_email,
+                  u.name AS user_name,
+                  r.name AS room_name
+                FROM bookings b
+                JOIN users u ON b.user_id = u.id
+                JOIN rooms r ON b.room_id = r.id
+                WHERE b.id IN (${placeholders})`,
+                conflictingBookingIds
+              );
+
+              console.log(
+                `📧 Found ${affectedBookings.length} affected bookings to notify`
+              );
+              console.log(
+                "Affected bookings details:",
+                affectedBookings.map((b) => ({
+                  id: b.id,
+                  status: b.status,
+                  user_email: b.user_email,
+                  room_name: b.room_name,
+                }))
+              );
+
+              // Send cancellation email to each affected user
+              for (const affectedBooking of affectedBookings) {
+                try {
+                  if (affectedBooking.user_email) {
+                    console.log(
+                      `📨 Sending cancellation email to ${affectedBooking.user_email} for booking ${affectedBooking.id}`
+                    );
+
+                    await sendOverrideCancellationEmail(
+                      affectedBooking.user_email,
+                      affectedBooking.user_name,
+                      {
+                        roomName: affectedBooking.room_name,
+                        date: affectedBooking.date,
+                        startTime: affectedBooking.start_time,
+                        endTime: affectedBooking.end_time,
+                        duration: affectedBooking.duration,
+                        purpose: affectedBooking.purpose,
+                      },
+                      {
+                        adminName: req.user.name,
+                        purpose: purpose,
+                        date: date,
+                        startTime: start_time,
+                        endTime: end_time,
+                      }
+                    );
+
+                    console.log(
+                      `✅ Email sent successfully for booking ${affectedBooking.id}`
+                    );
+
+                    rejected.push({
+                      id: affectedBooking.id,
+                      user_name: affectedBooking.user_name,
+                      room_name: affectedBooking.room_name,
+                      date: affectedBooking.date,
+                      start_time: affectedBooking.start_time,
+                      end_time: affectedBooking.end_time,
+                    });
+                  } else {
+                    console.warn(
+                      `⚠️ User email not found for booking ${affectedBooking.id}`
+                    );
+                  }
+                } catch (emailError) {
+                  console.error(
+                    `❌ Failed to send email for booking ${affectedBooking.id}:`,
+                    emailError.message
+                  );
+                }
+              }
+            } catch (fetchError) {
+              console.error(
+                "❌ Failed to fetch affected bookings:",
+                fetchError.message
+              );
+              console.error("Full error:", fetchError);
+            }
+          }
+        } else {
+          console.log("ℹ️ No existing_bookings to update (empty or undefined)");
+        }
       }
     }
+
+    console.log("📦 Final response:", {
+      created_count: created.length,
+      cancelled_count: cancelled.length,
+      rejected_count: rejected.length,
+      rejected_ids: rejected.map((r) => r.id),
+    });
 
     res.json({
       created,
       cancelled,
+      rejected,
     });
   } catch (error) {
     console.error("Error resolving conflicts:", error);
@@ -508,6 +685,143 @@ router.put("/:id/status", protect, admin, async (req, res) => {
 
     const bookingData = rows[0];
 
+    // ⚡ NEW: If approving, check for conflicts with existing approved bookings and override them
+    const rejectedBookings = [];
+
+    if (status === "approved") {
+      console.log(
+        `\n🔍 [Approval Override] Checking for conflicts for booking ${id}...`
+      );
+
+      try {
+        // Query for conflicting approved bookings
+        const [conflictingBookings] = await db.query(
+          `SELECT b.id, u.name AS user_name, u.email AS user_email, b.start_time, b.end_time, b.purpose,
+                  r.name AS room_name, b.date, b.duration
+           FROM bookings b
+           JOIN users u ON b.user_id = u.id
+           JOIN rooms r ON b.room_id = r.id
+           WHERE b.room_id = ?
+           AND b.date = ?
+           AND b.status = 'approved'
+           AND b.id != ?
+           AND NOT (b.end_time <= ? OR b.start_time >= ?)`,
+          [
+            bookingData.room_id,
+            bookingData.date,
+            id,
+            bookingData.start_time,
+            bookingData.end_time,
+          ]
+        );
+
+        console.log(
+          `📋 Found ${conflictingBookings.length} conflicting approved booking(s)`
+        );
+
+        if (conflictingBookings.length > 0) {
+          console.log(
+            "Conflicting booking IDs:",
+            conflictingBookings.map((b) => b.id)
+          );
+
+          // Build rejection reason
+          const rejectionReason = `Admin force-approved a conflicting booking by ${req.user.name} for ${bookingData.purpose} on ${bookingData.date} from ${bookingData.start_time} to ${bookingData.end_time}`;
+
+          // Update each conflicting booking to rejected
+          for (const conflictingBooking of conflictingBookings) {
+            try {
+              console.log(
+                `🔄 Updating conflicting booking ${conflictingBooking.id} to rejected...`
+              );
+
+              const [updateResult] = await db.query(
+                "UPDATE bookings SET status = ?, rejection_reason = ? WHERE id = ?",
+                ["rejected", rejectionReason, conflictingBooking.id]
+              );
+
+              console.log(`📊 Update result:`, {
+                id: conflictingBooking.id,
+                affectedRows: updateResult.affectedRows,
+                changedRows: updateResult.changedRows,
+              });
+
+              if (updateResult.affectedRows > 0) {
+                // Send cancellation email to affected user
+                try {
+                  if (conflictingBooking.user_email) {
+                    console.log(
+                      `📨 Sending override cancellation email to ${conflictingBooking.user_email}`
+                    );
+
+                    await sendOverrideCancellationEmail(
+                      conflictingBooking.user_email,
+                      conflictingBooking.user_name,
+                      {
+                        roomName: conflictingBooking.room_name,
+                        date: conflictingBooking.date,
+                        startTime: conflictingBooking.start_time,
+                        endTime: conflictingBooking.end_time,
+                        duration: conflictingBooking.duration,
+                        purpose: conflictingBooking.purpose,
+                      },
+                      {
+                        adminName: req.user.name,
+                        purpose: bookingData.purpose,
+                        date: bookingData.date,
+                        startTime: bookingData.start_time,
+                        endTime: bookingData.end_time,
+                      }
+                    );
+
+                    console.log(
+                      `✅ Override cancellation email sent for booking ${conflictingBooking.id}`
+                    );
+
+                    rejectedBookings.push({
+                      id: conflictingBooking.id,
+                      user_name: conflictingBooking.user_name,
+                      room_name: conflictingBooking.room_name,
+                    });
+                  } else {
+                    console.warn(
+                      `⚠️ No email found for user of booking ${conflictingBooking.id}`
+                    );
+                  }
+                } catch (emailError) {
+                  console.error(
+                    `❌ Failed to send override email for booking ${conflictingBooking.id}:`,
+                    emailError.message
+                  );
+                }
+              } else {
+                console.warn(
+                  `⚠️ Conflicting booking ${conflictingBooking.id} not updated (may not exist)`
+                );
+              }
+            } catch (updateError) {
+              console.error(
+                `❌ Failed to update conflicting booking ${conflictingBooking.id}:`,
+                updateError.message
+              );
+            }
+          }
+
+          console.log(
+            `✅ Override complete: ${rejectedBookings.length} booking(s) rejected and notified\n`
+          );
+        } else {
+          console.log("✅ No conflicts found, approval is clean\n");
+        }
+      } catch (conflictError) {
+        console.error(
+          "❌ Error checking for conflicts:",
+          conflictError.message
+        );
+        // Don't fail the entire approval if conflict check fails
+      }
+    }
+
     // Send appropriate email based on status
     try {
       if (status === "approved") {
@@ -542,7 +856,17 @@ router.put("/:id/status", protect, admin, async (req, res) => {
       );
     }
 
-    res.json({ message: `Booking ${id} ${status} successfully` });
+    // Include rejected bookings info in response for transparency
+    const responseMessage =
+      rejectedBookings.length > 0
+        ? `Booking ${id} ${status} successfully. ${rejectedBookings.length} conflicting booking(s) were automatically rejected.`
+        : `Booking ${id} ${status} successfully`;
+
+    res.json({
+      message: responseMessage,
+      rejectedBookings:
+        rejectedBookings.length > 0 ? rejectedBookings : undefined,
+    });
   } catch (error) {
     console.error(`Error updating booking ${id} status:`, error);
     res.status(500).json({ message: "Server error updating booking status" });
