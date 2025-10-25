@@ -16,10 +16,11 @@ import resourcesRoutes from "./routes/resources.js";
 const app = express();
 
 // Middleware
+const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:8080"; 
+
 app.use(
   cors({
-    // Allow frontend running on default 8080 (from your vite.config.ts)
-    origin: "http://localhost:8080",
+    origin: allowedOrigin,
   })
 );
 app.use(express.json());
