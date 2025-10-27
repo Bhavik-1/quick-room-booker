@@ -93,7 +93,7 @@ export const BulkBooking: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Bulk Booking</h2>
+        <h2 className="text-3xl font-bold tracking-tight">Upload Timetable</h2>
         <p className="text-muted-foreground mt-2">
           Upload CSV/Excel files or manually enter multiple bookings at once
         </p>
