@@ -439,7 +439,7 @@ const AdminDashboard = () => {
 
     // Add 1 to the current day.
     // setDate() automatically handles month and year rollovers.
-    nextDay.setDate(nextDay.getDate() + 1);
+    nextDay.setDate(nextDay.getDate());
 
     // Use the new date for formatting
     const dd = String(nextDay.getDate()).padStart(2, "0");
