@@ -27,27 +27,31 @@
 // export default pool;
 // backend/db.js (MODIFIED FOR VERCEL DEPLOYMENT)
 
+// backend/db.js
+
 import mysql from "mysql2/promise";
 import "dotenv/config";
-import fs from 'fs';      // Keep import for now, but ensure VERCEL_ENV handles file reading
-import path from 'path';  // Keep import for now
+import fs from "fs";
+import path from "path";
 
-// 🚨 IMPORTANT: In a deployment environment like Vercel, 
-// VERCEL_ENV will be set and we must read the CA content from an environment variable.
-const isVercel = process.env.VERCEL_ENV || process.env.NODE_ENV === 'production';
+// ✅ Detect if running on Vercel
+const isVercel = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
 
-// Determine SSL CA source
+// ✅ Read SSL cert content
 let caCertContent;
 if (isVercel) {
-    // 1. In Vercel, read the certificate string from the environment variable.
-    caCertContent = process.env.DB_CA_CERT_CONTENT; 
+  // In Vercel, read certificate from ENV (base64 or plain)
+  caCertContent = process.env.DB_CA_CERT_CONTENT;
+  if (!caCertContent) {
+    console.warn("⚠️ DB_CA_CERT_CONTENT not set in Vercel environment!");
+  }
 } else {
-    // 2. Locally, read the certificate from the local file path.
-    const caCertPath = path.resolve(process.cwd(), 'certs', 'aiven-ca.pem');
-    caCertContent = fs.readFileSync(caCertPath);
+  // Locally, read from file
+  const caCertPath = path.resolve(process.cwd(), "certs", "aiven-ca.pem");
+  caCertContent = fs.readFileSync(caCertPath, "utf-8");
 }
 
-
+// ✅ Create MySQL pool
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -57,15 +61,17 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  
-  // === SSL CONFIGURATION ===
-  ssl: caCertContent ? {
-    rejectUnauthorized: true, 
-    ca: caCertContent, // Pass the content, either from file (local) or ENV (Vercel)
-  } : false,
-  // ===============================
+
+  // ✅ SSL configuration
+  ssl: caCertContent
+    ? {
+        rejectUnauthorized: true,
+        ca: caCertContent,
+      }
+    : false,
 });
 
+// ✅ Test connection once on startup
 (async () => {
   try {
     await pool.query("SELECT 1");
@@ -75,5 +81,8 @@ const pool = mysql.createPool({
     process.exit(1);
   }
 })();
+
+export default pool;
+
 
 export default pool;
