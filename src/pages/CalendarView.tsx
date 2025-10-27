@@ -97,7 +97,7 @@ const CalendarView = ({
         if (dateMatch && timeMatch) {
           let year = Number(dateMatch[1]);
           let month = Number(dateMatch[2]) - 1;
-          let day = Number(dateMatch[3]) + 1;
+          let day = Number(dateMatch[3]);
           let hour = Number(timeMatch[1]);
           const minute = Number(timeMatch[2]);
           const second = Number(timeMatch[3] ?? 0);
