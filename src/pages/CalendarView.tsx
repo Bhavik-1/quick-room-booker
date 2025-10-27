@@ -166,7 +166,7 @@ const CalendarView = ({
     return new Date(
       year,
       month - 1,
-      day + 1,
+      day ,
       Number(hh),
       Number(mm),
       Number(ss)
