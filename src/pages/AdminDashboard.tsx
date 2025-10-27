@@ -572,7 +572,7 @@ const AdminDashboard = () => {
               onClick={() => setActiveTab("bulk")}
             >
               <Upload className="h-4 w-4 mr-2" />
-              Bulk Booking
+              Upload Timetable
             </Button>
           </aside>
 
