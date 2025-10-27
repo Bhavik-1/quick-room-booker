@@ -136,5 +136,4 @@ router.delete("/:id", protect, admin, async (req, res) => {
 
 // export { router as roomsRouter, checkAvailability };
 // export default router;
-export { checkAvailability }; // Named export for use in bookings.js
-export default router;
+export { checkAvailability, router as default };
