@@ -798,7 +798,7 @@ const AdminDashboard = () => {
                           handleFilterChange("status", val)
                         }
                       >
-                        <SelectTrigger id="status">
+                        <SelectTrigger id="status" data-testid="status-select">
                           <SelectValue placeholder="All Statuses" />
                         </SelectTrigger>
                         <SelectContent>
